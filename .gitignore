@@ -1,0 +1,7 @@
+*.o
+*.spept
+*.xml
+*.exe
+*.csv
+PetriCalc
+

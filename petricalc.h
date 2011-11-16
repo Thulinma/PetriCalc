@@ -3,7 +3,7 @@
 #include <map>
 #include <set>
 #include <string>
-#include <tinyxml.h>
+#include "tinyxml.h"
 
 /// A PetriNet Place - holds a single place's state information.
 class PetriPlace{
