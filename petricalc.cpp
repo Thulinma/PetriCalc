@@ -38,10 +38,12 @@ void PetriNet::parseNodes(TiXmlNode * N){
     if (name == "Place"){
       d = 0;
       while ((d = c->IterateChildren(d))){addPlace(d);}
+      fprintf(stderr, "Loaded %u places\n", (unsigned int)places.size());
     }
     if (name == "Transition"){
       d = 0;
       while ((d = c->IterateChildren(d))){addTransition(d);}
+      fprintf(stderr, "Loaded %u transitions\n", (unsigned int)transitions.size());
     }
     //other types not supported yet
   }
@@ -113,10 +115,18 @@ void PetriNet::addTransition(TiXmlNode * N){
         T.guard = g->LastChild()->ToElement()->GetText();
       }
     }
+    if (name == "Name"){
+      T.name = e->GetText();
+    }
+    if (name == "ID"){
+      if (T.name == ""){
+        T.name = std::string("trans_")+e->GetText();
+      }
+    }
   }
   transitions.insert(std::pair<unsigned int, PetriTrans>(T.id, T));
   #if DEBUG >= 10
-  fprintf(stderr, "Added transition ID %u, guard %s\n", T.id, T.guard.c_str());
+  fprintf(stderr, "Added transition %s ID %u, guard %s\n", T.name.c_str(), T.id, T.guard.c_str());
   #endif
 }
 
@@ -136,6 +146,7 @@ void PetriNet::parseEdges(TiXmlNode * N){
       d = 0;
       while ((d = c->IterateChildren(d))){addEdge(d, EDGE_READ);}
     }
+    fprintf(stderr, "Loaded %u edges\n", (unsigned int)edges.size());
     //other types not supported yet
   }
 }
@@ -273,8 +284,10 @@ bool PetriNet::CalculateStep(){
       conflict.push_back(*sT);//add to set of conflicting transitions
     }
   }
-  
+
+  #if DEBUG >= 5
   fprintf(stderr, "Stepping: %u transitions enabled, %u in conflict\n", (unsigned int)enabled.size(), (unsigned int)conflict.size());
+  #endif
 
   //remove conflicting transitions from set of enabled transitions
   for (dT = conflict.begin(); dT != conflict.end(); dT++){enabled.erase(*dT);}
@@ -318,14 +331,18 @@ bool PetriNet::CalculateStep(){
 
 bool PetriNet::conflicts(unsigned int transition, std::set<unsigned int> & checked_transitions){
   std::set<unsigned int>::iterator edgeit;
+  std::set<unsigned int>::iterator edgeit2;
   std::set<unsigned int>::iterator checkit;
   for (edgeit = transitions[transition].inputs.begin(); edgeit != transitions[transition].inputs.end(); edgeit++){
     if (edges[*edgeit].etype == EDGE_READ){continue;}
     if (edges[*edgeit].multiplicity > 0){
       for (checkit = checked_transitions.begin(); checkit != checked_transitions.end(); checkit++){
-        if (*checkit == transition){continue;}//skip self
-        if (transitions[*checkit].inputs.find(*edgeit) != transitions[*checkit].inputs.end()){
-          return true;//we found a conflict, return true
+        if (*checkit != transition){//skip self
+          for (edgeit2 = transitions[*checkit].inputs.begin(); edgeit2 != transitions[*checkit].inputs.end(); edgeit2++){
+            if (edges[*edgeit].source == edges[*edgeit2].source){
+              return true;//we found a conflict, return true
+            }
+          }
         }
       }
     }else{
@@ -426,8 +443,8 @@ void PetriNet::doInput(unsigned int T, unsigned int cnt){
 }
 
 void PetriNet::doInputOutput(unsigned int T, unsigned int cnt){
-  #if DEBUG >= 4
-  fprintf(stderr, "Transition %u fires %u times (%u inputs, %u outputs):\n", T, cnt, (unsigned int)transitions[T].inputs.size(), (unsigned int)transitions[T].outputs.size());
+  #if DEBUG >= 5
+  fprintf(stderr, "Transition %s fires %u times (%u inputs, %u outputs):\n", transitions[T].name.c_str(), cnt, (unsigned int)transitions[T].inputs.size(), (unsigned int)transitions[T].outputs.size());
   #endif
   std::map<std::string, std::string> vars;
   std::set<unsigned int>::iterator edgeit;

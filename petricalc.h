@@ -19,6 +19,7 @@ class PetriPlace{
 class PetriTrans{
   public:
     unsigned int id;
+    std::string name;
     std::string guard;
     std::set<unsigned int> inputs;
     std::set<unsigned int> outputs;
