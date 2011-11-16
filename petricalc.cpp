@@ -25,6 +25,7 @@ PetriNet::PetriNet(std::string XML){
   if (c){
     parseMeta(c);
   }
+  LoadCache();
 };
 
 void PetriNet::parseNodes(TiXmlNode * N){
@@ -329,28 +330,52 @@ bool PetriNet::CalculateStep(){
   return true;
 }
 
-bool PetriNet::conflicts(unsigned int transition, std::set<unsigned int> & checked_transitions){
+void PetriNet::LoadCache(){
   std::set<unsigned int>::iterator edgeit;
   std::set<unsigned int>::iterator edgeit2;
-  std::set<unsigned int>::iterator checkit;
-  for (edgeit = transitions[transition].inputs.begin(); edgeit != transitions[transition].inputs.end(); edgeit++){
-    if (edges[*edgeit].etype == EDGE_READ){continue;}
-    if (edges[*edgeit].multiplicity > 0){
-      for (checkit = checked_transitions.begin(); checkit != checked_transitions.end(); checkit++){
-        if (*checkit != transition){//skip self
-          for (edgeit2 = transitions[*checkit].inputs.begin(); edgeit2 != transitions[*checkit].inputs.end(); edgeit2++){
-            if (edges[*edgeit].source == edges[*edgeit2].source){
-              return true;//we found a conflict, return true
+  std::map<unsigned int, PetriTrans>::iterator transIt;
+  std::map<unsigned int, PetriTrans>::iterator transIt2;
+  for (transIt = transitions.begin(); transIt != transitions.end(); transIt++){
+    for (edgeit = transIt->second.inputs.begin(); edgeit != transIt->second.inputs.end(); edgeit++){
+      if (edges[*edgeit].etype == EDGE_READ){continue;}
+      if (edges[*edgeit].multiplicity > 0){
+        for (transIt2 = transitions.begin(); transIt2 != transitions.end(); transIt2++){
+          if (transIt2 != transIt){//skip self
+            for (edgeit2 = transIt2->second.inputs.begin(); edgeit2 != transIt2->second.inputs.end(); edgeit2++){
+              if (edges[*edgeit].source == edges[*edgeit2].source){
+                transIt->second.conflicts_with.insert(transIt2->first);
+                break;
+              }
             }
           }
         }
+      }else{
+        /// \todo Conflict checking for colored nets is missing
+        //assuming in conflict with all for now
+        for (transIt2 = transitions.begin(); transIt2 != transitions.end(); transIt2++){
+          if (transIt2 != transIt){//skip self
+            transIt->second.conflicts_with.insert(transIt2->first);
+          }
+        }
       }
-    }else{
-      /// \todo Conflict checking for colored nets is missing
-      //assuming always in conflict for now
-      return true;
     }
   }
+}
+
+bool PetriNet::conflicts(unsigned int transition, std::set<unsigned int> & checked_transitions){
+  std::set<unsigned int>::iterator checkit;
+  //check the cache and checked_transitions for matching transitions
+  //any match = conflicting transition
+  if (checked_transitions.size() > transitions[transition].conflicts_with.size()){
+    for (checkit = transitions[transition].conflicts_with.begin(); checkit != transitions[transition].conflicts_with.end(); checkit++){
+      if (checked_transitions.count(*checkit) > 0){return true;}
+    }
+  }else{
+    for (checkit = checked_transitions.begin(); checkit != checked_transitions.end(); checkit++){
+      if (transitions[transition].conflicts_with.count(*checkit) > 0){return true;}
+    }
+  }
+  //no matches = no conflict
   return false;
 }
 

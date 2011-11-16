@@ -1,8 +1,10 @@
 #include "petricalc.h"
 #include <iostream>
+#include <time.h>
 
 int main(int argc, char ** argv){
   int printcount = 1;
+  unsigned int lastSteps = 0, nextTime = 0;
   std::map<std::string, unsigned int> cellnames;
   if (argc < 2){
     std::cerr << "Usage: " << argv[0] << " snoopy_petrinet_filename [print_every_this_many_steps, default 1] [space-seperated list of cellnames to output, by default all]" << std::endl;
@@ -34,8 +36,14 @@ int main(int argc, char ** argv){
   while (Net.CalculateStep()){
     steps++;
     if (steps % printcount == 0){
-      std::cerr << "Stepped " << steps << " time(s)" << std::endl;
       if (cellnames.size() == 0){Net.PrintState();}else{Net.PrintState(cellnames);}
     }
+    if (time(0) >= nextTime){
+      nextTime = time(0)+1;
+      std::cerr << "Calculated " << steps << " steps, " << (steps-lastSteps) << " steps/s..." << std::endl;
+      lastSteps = steps;
+    }
   }
+  
+  
 }

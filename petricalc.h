@@ -23,6 +23,7 @@ class PetriTrans{
     std::string guard;
     std::set<unsigned int> inputs;
     std::set<unsigned int> outputs;
+    std::set<unsigned int> conflicts_with;
 };
 
 /// Contains possible edge types.
@@ -70,6 +71,7 @@ class PetriNet{
     unsigned int findPlace(std::string placename);
     bool conflicts(unsigned int transition, std::set<unsigned int> & checked_transitions);
 private:
+    void LoadCache();
     void parseNodes(TiXmlNode * N);
     void parseEdges(TiXmlNode * N);
     void parseMeta(TiXmlNode * N);
