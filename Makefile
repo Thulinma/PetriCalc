@@ -16,6 +16,8 @@ LIBS =
 default: $(OUT)
 fast:
 	make clean default OPTIMIZE=-Ofast DEBUG=0
+realfast:
+	make clean default OPTIMIZE="-Ofast -march=native" DEBUG=0
 .cpp.o:
 	$(CC) $(INCLUDES) $(CCFLAGS) $(LIBS) -c $< -o $@
 $(OUT): $(OBJ)
@@ -23,5 +25,5 @@ $(OUT): $(OBJ)
 clean:
 	rm -rf $(OBJ) $(OUT) Makefile.bak *~
 windows:
-	make clean default OUT=$(OUT).exe OPTIMIZE=-O2 DEBUG=0 CROSS=i386-mingw32msvc-
+	make clean default OUT=$(OUT).exe OPTIMIZE=-O3 DEBUG=0 CROSS=i386-mingw32msvc-
 
