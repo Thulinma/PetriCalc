@@ -29,7 +29,8 @@ class PetriTrans{
 /// Contains possible edge types.
 enum edgeType{
   EDGE_NORMAL,
-  EDGE_READ
+  EDGE_ACTIVATOR,
+  EDGE_INHIBITOR
 };
 
 enum calcType{

@@ -145,7 +145,11 @@ void PetriNet::parseEdges(TiXmlNode * N){
     }
     if (name == "Read Edge"){
       d = 0;
-      while ((d = c->IterateChildren(d))){addEdge(d, EDGE_READ);}
+      while ((d = c->IterateChildren(d))){addEdge(d, EDGE_ACTIVATOR);}
+    }
+    if (name == "Inhibitor Edge"){
+      d = 0;
+      while ((d = c->IterateChildren(d))){addEdge(d, EDGE_INHIBITOR);}
     }
     //other types not supported yet
   }
@@ -338,11 +342,13 @@ void PetriNet::LoadCache(){
   std::map<unsigned int, PetriTrans>::iterator transIt2;
   for (transIt = transitions.begin(); transIt != transitions.end(); transIt++){
     for (edgeit = transIt->second.inputs.begin(); edgeit != transIt->second.inputs.end(); edgeit++){
-      if (edges[*edgeit].etype == EDGE_READ){continue;}
+      if (edges[*edgeit].etype == EDGE_ACTIVATOR){continue;}//these arcs are not affected by conflicts
+      if (edges[*edgeit].etype == EDGE_INHIBITOR){continue;}//these arcs are not affected by conflicts
       if (edges[*edgeit].multiplicity > 0){
         for (transIt2 = transitions.begin(); transIt2 != transitions.end(); transIt2++){
           if (transIt2 != transIt){//skip self
             for (edgeit2 = transIt2->second.inputs.begin(); edgeit2 != transIt2->second.inputs.end(); edgeit2++){
+              if (edges[*edgeit2].etype == EDGE_INHIBITOR){continue;}//these arcs are not affected by conflicts
               if (edges[*edgeit].source == edges[*edgeit2].source){
                 transIt->second.conflicts_with.insert(transIt2->first);
                 break;
@@ -400,6 +406,7 @@ bool PetriNet::findInput(unsigned int src, std::string expression, std::map<std:
 
 /// Returns how many times this expression can fire currently
 unsigned int PetriNet::isEnabled(unsigned int T, calcType C){
+  /// \todo Optimize this by only checking changed transitions (changed input/output) every iteration
   std::map<std::string, std::string> vars;
   std::set<unsigned int>::iterator edgeit;
   unsigned int fire_count = 0xFFFFFFFF; //start with maximum possible
@@ -408,13 +415,18 @@ unsigned int PetriNet::isEnabled(unsigned int T, calcType C){
   }else{
     for (edgeit = transitions[T].inputs.begin(); edgeit != transitions[T].inputs.end(); edgeit++){
       //skip read edges if calculation type is midstep
-      if ((C == CALC_MIDSTEP) && (edges[*edgeit].etype == EDGE_READ)){continue;}
+      if ((C == CALC_MIDSTEP) && (edges[*edgeit].etype == EDGE_ACTIVATOR)){continue;}
 
+      //no expression, just a number
       if (edges[*edgeit].multiplicity > 0){
-        //no expression, just a number
+        //inhibitor arcs disable firing if filled, unaffect firing if not filled
+        if (edges[*edgeit].etype == EDGE_INHIBITOR){
+          if (places[edges[*edgeit].source].iMarking == 0){continue;}
+          return 0;
+        }
         if (places[edges[*edgeit].source].iMarking >= edges[*edgeit].multiplicity){
-          //if edgetype is EDGE_READ, fire count is not affected as long as it is enabled
-          if (edges[*edgeit].etype == EDGE_READ){continue;}
+          //if edgetype is EDGE_ACTIVATOR, fire count is not affected as long as it is enabled
+          if (edges[*edgeit].etype == EDGE_ACTIVATOR){continue;}
           unsigned int tmp = places[edges[*edgeit].source].iMarking / edges[*edgeit].multiplicity;
           if (tmp < fire_count){fire_count = tmp;}//set fire_count to the minimum count of the input edges
         }else{
@@ -458,8 +470,9 @@ void PetriNet::doInput(unsigned int T, unsigned int cnt){
   }else{
     for (edgeit = transitions[T].inputs.begin(); edgeit != transitions[T].inputs.end(); edgeit++){
       if (edges[*edgeit].multiplicity > 0){
-        //remove input, only if edgetype is not EDGE_READ
-        if (edges[*edgeit].etype == EDGE_READ){continue;}
+        //remove input, only if edgetype is not EDGE_ACTIVATOR or EDGE_INHIBITOR
+        if (edges[*edgeit].etype == EDGE_ACTIVATOR){continue;}
+        if (edges[*edgeit].etype == EDGE_INHIBITOR){continue;}
         places[edges[*edgeit].source].iMarking -= edges[*edgeit].multiplicity * cnt;
       }else{
         //try to match an input, we assume this is successful because isEnabled was already called.
@@ -482,8 +495,9 @@ void PetriNet::doInputOutput(unsigned int T, unsigned int cnt){
   }else{
     for (edgeit = transitions[T].inputs.begin(); edgeit != transitions[T].inputs.end(); edgeit++){
       if (edges[*edgeit].multiplicity > 0){
-        //remove input, only if edgetype is not EDGE_READ
-        if (edges[*edgeit].etype == EDGE_READ){continue;}
+        //remove input, only if edgetype is not EDGE_ACTIVATOR or EDGE_INHIBITOR
+        if (edges[*edgeit].etype == EDGE_ACTIVATOR){continue;}
+        if (edges[*edgeit].etype == EDGE_INHIBITOR){continue;}
         places[edges[*edgeit].source].iMarking -= edges[*edgeit].multiplicity * cnt;
         #if DEBUG >= 5
         fprintf(stderr, "Lowered place %s by %u X %u to %u...\n", places[edges[*edgeit].source].name.c_str(), edges[*edgeit].multiplicity, cnt, places[edges[*edgeit].source].iMarking);
