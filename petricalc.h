@@ -30,7 +30,9 @@ class PetriTrans{
 enum edgeType{
   EDGE_NORMAL,
   EDGE_ACTIVATOR,
-  EDGE_INHIBITOR
+  EDGE_INHIBITOR,
+  EDGE_RESET,
+  EDGE_EQUAL
 };
 
 enum calcType{

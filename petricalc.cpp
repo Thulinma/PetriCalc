@@ -151,6 +151,14 @@ void PetriNet::parseEdges(TiXmlNode * N){
       d = 0;
       while ((d = c->IterateChildren(d))){addEdge(d, EDGE_INHIBITOR);}
     }
+    if (name == "Reset Edge"){
+      d = 0;
+      while ((d = c->IterateChildren(d))){addEdge(d, EDGE_RESET);}
+    }
+    if (name == "Equal Edge"){
+      d = 0;
+      while ((d = c->IterateChildren(d))){addEdge(d, EDGE_EQUAL);}
+    }
     //other types not supported yet
   }
   fprintf(stderr, "Loaded %u edges\n", (unsigned int)edges.size());
@@ -159,6 +167,7 @@ void PetriNet::parseEdges(TiXmlNode * N){
 void PetriNet::addEdge(TiXmlNode * N, edgeType E){
   TiXmlElement * e;
   PetriEdge R;
+  R.multiplicity = 0;
   e = N->ToElement();
   const char * id = e->Attribute("id");
   if (!id){return;}
@@ -188,6 +197,7 @@ void PetriNet::addEdge(TiXmlNode * N, edgeType E){
       R.multiplicity = atoi(e->GetText());
     }
   }
+  if ((R.expression == "") && !R.multiplicity){R.multiplicity = 1;}
   edges.insert(std::pair<unsigned int, PetriEdge>(R.id, R));
   #if DEBUG >= 10
   fprintf(stderr, "Added edge from %u to %u, multiplicity %u, expression %s\n", R.source, R.target, R.multiplicity, R.expression.c_str());
@@ -344,6 +354,7 @@ void PetriNet::LoadCache(){
     for (edgeit = transIt->second.inputs.begin(); edgeit != transIt->second.inputs.end(); edgeit++){
       if (edges[*edgeit].etype == EDGE_ACTIVATOR){continue;}//these arcs are not affected by conflicts
       if (edges[*edgeit].etype == EDGE_INHIBITOR){continue;}//these arcs are not affected by conflicts
+      if (edges[*edgeit].etype == EDGE_EQUAL){continue;}//these arcs are not affected by conflicts
       if (edges[*edgeit].multiplicity > 0){
         for (transIt2 = transitions.begin(); transIt2 != transitions.end(); transIt2++){
           if (transIt2 != transIt){//skip self
@@ -416,12 +427,19 @@ unsigned int PetriNet::isEnabled(unsigned int T, calcType C){
     for (edgeit = transitions[T].inputs.begin(); edgeit != transitions[T].inputs.end(); edgeit++){
       //skip read edges if calculation type is midstep
       if ((C == CALC_MIDSTEP) && (edges[*edgeit].etype == EDGE_ACTIVATOR)){continue;}
+      //skip equals edges if calculation type is midstep
+      if ((C == CALC_MIDSTEP) && (edges[*edgeit].etype == EDGE_EQUAL)){continue;}
 
       //no expression, just a number
       if (edges[*edgeit].multiplicity > 0){
         //inhibitor arcs disable firing if filled, unaffect firing if not filled
         if (edges[*edgeit].etype == EDGE_INHIBITOR){
           if (places[edges[*edgeit].source].iMarking == 0){continue;}
+          return 0;
+        }
+        //equal arcs disable firing if not equal, unaffect firing if they are
+        if (edges[*edgeit].etype == EDGE_EQUAL){
+          if (places[edges[*edgeit].source].iMarking == edges[*edgeit].multiplicity){continue;}
           return 0;
         }
         if (places[edges[*edgeit].source].iMarking >= edges[*edgeit].multiplicity){
@@ -433,6 +451,7 @@ unsigned int PetriNet::isEnabled(unsigned int T, calcType C){
           return 0;
         }
       }else{
+        fprintf(stderr, "Error: not a multiplicity\n");
         //try to match an input
         if (!findInput(edges[*edgeit].source, edges[*edgeit].expression, vars)){
           //if no match can be made, this transition can't fire
@@ -462,7 +481,7 @@ void PetriNet::doInput(unsigned int T, unsigned int cnt){
   std::map<std::string, std::string> vars;
   std::set<unsigned int>::iterator edgeit;
   #if DEBUG >= 5
-  fprintf(stderr, "Doing input step for transition %u...\n", T);
+  fprintf(stderr, "Doing input step for transition %s...\n", transitions[T].name.c_str());
   #endif
   if (transitions[T].guard.size() > 0){
     fprintf(stderr, "Guard unsupported!\n");
@@ -470,10 +489,13 @@ void PetriNet::doInput(unsigned int T, unsigned int cnt){
   }else{
     for (edgeit = transitions[T].inputs.begin(); edgeit != transitions[T].inputs.end(); edgeit++){
       if (edges[*edgeit].multiplicity > 0){
-        //remove input, only if edgetype is not EDGE_ACTIVATOR or EDGE_INHIBITOR
+        //remove input, only if edgetype is not EDGE_ACTIVATOR or EDGE_INHIBITOR or EDGE_EQUAL
         if (edges[*edgeit].etype == EDGE_ACTIVATOR){continue;}
         if (edges[*edgeit].etype == EDGE_INHIBITOR){continue;}
+        if (edges[*edgeit].etype == EDGE_EQUAL){continue;}
         places[edges[*edgeit].source].iMarking -= edges[*edgeit].multiplicity * cnt;
+        //for reset edges, remove all tokens
+        if (edges[*edgeit].etype == EDGE_RESET){places[edges[*edgeit].source].iMarking = 0;}
       }else{
         //try to match an input, we assume this is successful because isEnabled was already called.
         findInput(edges[*edgeit].source, edges[*edgeit].expression, vars);
@@ -495,10 +517,13 @@ void PetriNet::doInputOutput(unsigned int T, unsigned int cnt){
   }else{
     for (edgeit = transitions[T].inputs.begin(); edgeit != transitions[T].inputs.end(); edgeit++){
       if (edges[*edgeit].multiplicity > 0){
-        //remove input, only if edgetype is not EDGE_ACTIVATOR or EDGE_INHIBITOR
+        //remove input, only if edgetype is not EDGE_ACTIVATOR or EDGE_INHIBITOR or EDGE_EQUAL
         if (edges[*edgeit].etype == EDGE_ACTIVATOR){continue;}
         if (edges[*edgeit].etype == EDGE_INHIBITOR){continue;}
+        if (edges[*edgeit].etype == EDGE_EQUAL){continue;}
         places[edges[*edgeit].source].iMarking -= edges[*edgeit].multiplicity * cnt;
+        //for reset edges, remove all tokens
+        if (edges[*edgeit].etype == EDGE_RESET){places[edges[*edgeit].source].iMarking = 0;}
         #if DEBUG >= 5
         fprintf(stderr, "Lowered place %s by %u X %u to %u...\n", places[edges[*edgeit].source].name.c_str(), edges[*edgeit].multiplicity, cnt, places[edges[*edgeit].source].iMarking);
         #endif

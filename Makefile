@@ -15,7 +15,7 @@ LIBS =
 .PHONY: clean default
 default: $(OUT)
 fast:
-	make clean default OPTIMIZE=-O2 DEBUG=0
+	make clean default OPTIMIZE=-Ofast DEBUG=0
 .cpp.o:
 	$(CC) $(INCLUDES) $(CCFLAGS) $(LIBS) -c $< -o $@
 $(OUT): $(OBJ)
