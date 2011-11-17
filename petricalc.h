@@ -32,6 +32,11 @@ enum edgeType{
   EDGE_READ
 };
 
+enum calcType{
+  CALC_FULL,
+  CALC_MIDSTEP
+};
+
 /// A PetriNet Edge - holds a single edge's state information.
 class PetriEdge{
   public:
@@ -62,7 +67,7 @@ class PetriNet{
     void PrintState();///< Prints the current net state, seperated by tabs, followed by a newline.
     void PrintStateHeader(std::map<std::string, unsigned int> & cellnames);
     void PrintState(std::map<std::string, unsigned int> & cellnames);
-    unsigned int isEnabled(unsigned int T);///< Returns how many times this transition is enabled.
+    unsigned int isEnabled(unsigned int T, calcType C = CALC_FULL);///< Returns how many times this transition is enabled.
     std::map<unsigned int, PetriPlace> places;
     std::map<unsigned int, PetriTrans> transitions;
     std::map<unsigned int, PetriEdge> edges;

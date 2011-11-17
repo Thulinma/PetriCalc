@@ -147,9 +147,9 @@ void PetriNet::parseEdges(TiXmlNode * N){
       d = 0;
       while ((d = c->IterateChildren(d))){addEdge(d, EDGE_READ);}
     }
-    fprintf(stderr, "Loaded %u edges\n", (unsigned int)edges.size());
     //other types not supported yet
   }
+  fprintf(stderr, "Loaded %u edges\n", (unsigned int)edges.size());
 }
 
 void PetriNet::addEdge(TiXmlNode * N, edgeType E){
@@ -306,15 +306,16 @@ bool PetriNet::CalculateStep(){
   }
 
   //all conflicting transitions consume their input in random order, one time
+  //calculations are done as "midstep" type to prevent activator arcs from disabling already enabled edges
   while (conflict.size() > 0){
     std::random_shuffle(conflict.begin(), conflict.end());
-    unsigned int cnt = isEnabled(conflict[0]);
+    unsigned int cnt = isEnabled(conflict[0], CALC_MIDSTEP);
     if (cnt < 1){
       conflict.erase(conflict.begin());
     }else{
       counter[conflict[0]] += 1;//mark transition
       doInput(conflict[0], 1);
-      if (isEnabled(conflict[0]) < 1){conflict.erase(conflict.begin());}
+      if (isEnabled(conflict[0], CALC_MIDSTEP) < 1){conflict.erase(conflict.begin());}
     }
   }
 
@@ -398,7 +399,7 @@ bool PetriNet::findInput(unsigned int src, std::string expression, std::map<std:
 }
 
 /// Returns how many times this expression can fire currently
-unsigned int PetriNet::isEnabled(unsigned int T){
+unsigned int PetriNet::isEnabled(unsigned int T, calcType C){
   std::map<std::string, std::string> vars;
   std::set<unsigned int>::iterator edgeit;
   unsigned int fire_count = 0xFFFFFFFF; //start with maximum possible
@@ -406,6 +407,9 @@ unsigned int PetriNet::isEnabled(unsigned int T){
     return 0;/// \todo guard support
   }else{
     for (edgeit = transitions[T].inputs.begin(); edgeit != transitions[T].inputs.end(); edgeit++){
+      //skip read edges if calculation type is midstep
+      if ((C == CALC_MIDSTEP) && (edges[*edgeit].etype == EDGE_READ)){continue;}
+
       if (edges[*edgeit].multiplicity > 0){
         //no expression, just a number
         if (places[edges[*edgeit].source].iMarking >= edges[*edgeit].multiplicity){
