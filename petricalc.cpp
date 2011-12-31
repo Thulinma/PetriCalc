@@ -434,7 +434,7 @@ unsigned int PetriNet::isEnabled(unsigned int T, calcType C){
       if (edges[*edgeit].multiplicity > 0){
         //inhibitor arcs disable firing if filled, unaffect firing if not filled
         if (edges[*edgeit].etype == EDGE_INHIBITOR){
-          if (places[edges[*edgeit].source].iMarking == 0){continue;}
+          if (places[edges[*edgeit].source].iMarking < edges[*edgeit].multiplicity){continue;}
           return 0;
         }
         //equal arcs disable firing if not equal, unaffect firing if they are
