@@ -4,7 +4,7 @@
 
 int main(int argc, char ** argv){
   int printcount = 1;
-  unsigned int lastSteps = 0, nextTime = time(0) + 1;
+  time_t lastSteps = 0, nextTime = time(0) + 1;
   std::map<std::string, unsigned int> cellnames;
   if (argc < 2){
     std::cerr << "Usage: " << argv[0] << " snoopy_petrinet_filename [print_every_this_many_steps, default 1] [space-seperated list of places to output, by default all]" << std::endl;

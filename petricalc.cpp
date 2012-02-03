@@ -552,7 +552,7 @@ void PetriNet::PrintState(){
   std::map<unsigned int, PetriPlace>::iterator pIter;
   for (pIter = places.begin(); pIter != places.end(); pIter++){
     if (pIter->second.marking.empty()){
-      printf("%u\t", pIter->second.iMarking);
+      printf("%llu\t", pIter->second.iMarking);
     }else{
       printf("colored_unsupported\t");
     }
@@ -580,7 +580,7 @@ void PetriNet::PrintState(std::map<std::string, unsigned int> & cellnames){
   std::map<std::string, unsigned int>::iterator nIter;
   for (nIter = cellnames.begin(); nIter != cellnames.end(); nIter++){
     if (places[nIter->second].marking.empty()){
-      printf("%u\t", places[nIter->second].iMarking);
+      printf("%llu\t", places[nIter->second].iMarking);
     }else{
       printf("colored_unsupported\t");
     }

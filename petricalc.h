@@ -11,7 +11,7 @@ class PetriPlace{
     unsigned int id; ///< Internal ID
     std::string name; ///< Human-readable name
     std::string color; ///< Colorset
-    unsigned int iMarking; ///< Integer marking
+    unsigned long long int iMarking; ///< Integer marking
     std::map<std::string, unsigned int> marking; ///< Colored marking
 };
 
