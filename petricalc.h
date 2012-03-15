@@ -70,7 +70,7 @@ class PetriNet{
     void PrintState();///< Prints the current net state, seperated by tabs, followed by a newline.
     void PrintStateHeader(std::map<std::string, unsigned int> & cellnames);
     void PrintState(std::map<std::string, unsigned int> & cellnames);
-    unsigned int isEnabled(unsigned int T, calcType C = CALC_FULL);///< Returns how many times this transition is enabled.
+    unsigned long long int isEnabled(unsigned int T, calcType C = CALC_FULL);///< Returns how many times this transition is enabled.
     std::map<unsigned int, PetriPlace> places;
     std::map<unsigned int, PetriTrans> transitions;
     std::map<unsigned int, PetriEdge> edges;
@@ -89,7 +89,7 @@ private:
     void addColset(TiXmlNode * N);
     void addVariable(TiXmlNode * N);
     bool findInput(unsigned int src, std::string expression, std::map<std::string, std::string> & vars);
-    void doInput(unsigned int T, unsigned int cnt);
-    void doInputOutput(unsigned int T, unsigned int cnt);
+    void doInput(unsigned int T, unsigned long long int cnt);
+    void doInputOutput(unsigned int T, unsigned long long int cnt);
     TiXmlDocument myXML;
 };//PetriNet

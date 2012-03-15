@@ -2,6 +2,10 @@
 #include <deque>
 #include <algorithm>
 
+// intern werken met range arcs werken die values hebben voor effect
+// uitwerken formeel van hoe alles werkt
+// updaten eerste document
+
 PetriNet::PetriNet(std::string XML){
   myXML = TiXmlDocument(XML);
   if (!myXML.LoadFile()){
@@ -282,8 +286,8 @@ bool PetriNet::CalculateStep(){
   std::set<unsigned int>::iterator sT;
   std::deque<unsigned int> conflict;
   std::deque<unsigned int>::iterator dT;
-  std::map<unsigned int, unsigned int> counter;
-  std::map<unsigned int, unsigned int>::iterator cit;
+  std::map<unsigned int, unsigned long long int> counter;
+  std::map<unsigned int, unsigned long long int>::iterator cit;
   std::map<unsigned int, PetriPlace> TMPplaces = places;//make backup for restoring later
   
   
@@ -311,7 +315,7 @@ bool PetriNet::CalculateStep(){
   //no output is done just yet
   while (enabled.size() > 0){
     sT = enabled.begin();
-    unsigned int cnt = isEnabled(*sT);
+    unsigned long long int cnt = isEnabled(*sT);
     if (cnt > 0){
       counter[*sT] += cnt;//mark transition
       doInput(*sT, cnt);
@@ -323,7 +327,7 @@ bool PetriNet::CalculateStep(){
   //calculations are done as "midstep" type to prevent activator arcs from disabling already enabled edges
   while (conflict.size() > 0){
     std::random_shuffle(conflict.begin(), conflict.end());
-    unsigned int cnt = isEnabled(conflict[0], CALC_MIDSTEP);
+    unsigned long long int cnt = isEnabled(conflict[0], CALC_MIDSTEP);
     if (cnt < 1){
       conflict.erase(conflict.begin());
     }else{
@@ -416,11 +420,11 @@ bool PetriNet::findInput(unsigned int src, std::string expression, std::map<std:
 }
 
 /// Returns how many times this expression can fire currently
-unsigned int PetriNet::isEnabled(unsigned int T, calcType C){
+unsigned long long int PetriNet::isEnabled(unsigned int T, calcType C){
   /// \todo Optimize this by only checking changed transitions (changed input/output) every iteration
   std::map<std::string, std::string> vars;
   std::set<unsigned int>::iterator edgeit;
-  unsigned int fire_count = 0xFFFFFFFF; //start with maximum possible
+  unsigned long long int fire_count = 0xFFFFFFF; //start with maximum possible
   if (transitions[T].guard.size() > 0){
     return 0;/// \todo guard support
   }else{
@@ -445,7 +449,7 @@ unsigned int PetriNet::isEnabled(unsigned int T, calcType C){
         if (places[edges[*edgeit].source].iMarking >= edges[*edgeit].multiplicity){
           //if edgetype is EDGE_ACTIVATOR, fire count is not affected as long as it is enabled
           if (edges[*edgeit].etype == EDGE_ACTIVATOR){continue;}
-          unsigned int tmp = places[edges[*edgeit].source].iMarking / edges[*edgeit].multiplicity;
+          unsigned long long int tmp = places[edges[*edgeit].source].iMarking / edges[*edgeit].multiplicity;
           if (tmp < fire_count){fire_count = tmp;}//set fire_count to the minimum count of the input edges
         }else{
           return 0;
@@ -462,7 +466,11 @@ unsigned int PetriNet::isEnabled(unsigned int T, calcType C){
       }
     }
   }
-  if (fire_count == 0xFFFFFFFF){fire_count = 1;}//only fire once if fire count is maximum to prevent crazy
+  if (fire_count == 0xFFFFFFFF){
+    //this makes no sense
+    std::cerr << "A transition could fire unboundedly. Don't do that." << std::endl;
+    exit(999);
+  }
   return fire_count;
 }
 
@@ -477,7 +485,7 @@ std::string fillVars(std::string S, std::map<std::string, std::string> vars){
   return S;
 }
 
-void PetriNet::doInput(unsigned int T, unsigned int cnt){
+void PetriNet::doInput(unsigned int T, unsigned long long int cnt){
   std::map<std::string, std::string> vars;
   std::set<unsigned int>::iterator edgeit;
   #if DEBUG >= 5
@@ -506,7 +514,7 @@ void PetriNet::doInput(unsigned int T, unsigned int cnt){
   }
 }
 
-void PetriNet::doInputOutput(unsigned int T, unsigned int cnt){
+void PetriNet::doInputOutput(unsigned int T, unsigned long long int cnt){
   #if DEBUG >= 5
   fprintf(stderr, "Transition %s fires %u times (%u inputs, %u outputs):\n", transitions[T].name.c_str(), cnt, (unsigned int)transitions[T].inputs.size(), (unsigned int)transitions[T].outputs.size());
   #endif
