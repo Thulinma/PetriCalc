@@ -284,8 +284,8 @@ bool PetriNet::CalculateStep(){
   std::map<unsigned int, PetriTrans>::iterator T;
   std::set<unsigned int> enabled;
   std::set<unsigned int>::iterator sT;
-  std::deque<unsigned int> conflict;
-  std::deque<unsigned int>::iterator dT;
+  std::vector<unsigned int> conflict;
+  std::vector<unsigned int>::iterator dT;
   std::map<unsigned int, unsigned long long int> counter;
   std::map<unsigned int, unsigned long long int>::iterator cit;
   
@@ -325,15 +325,15 @@ bool PetriNet::CalculateStep(){
   //all conflicting transitions consume their input in random order, one time
   //calculations are done as "midstep" type to prevent activator arcs from disabling already enabled edges
   while (conflict.size() > 0){
-    std::random_shuffle(conflict.begin(), conflict.end());
-    unsigned long long int cnt = isEnabled(conflict[0], CALC_MIDSTEP);
+    unsigned int i = rand() % conflict.size();
+    unsigned long long int cnt = isEnabled(conflict[i], CALC_MIDSTEP);
     if (cnt < 1){
-      conflict.erase(conflict.begin());
+      conflict.erase(conflict.begin() + i);
     }else{
       cnt = (rand() % cnt) + 1;//do random amount of times
-      counter[conflict[0]] += cnt;//mark transition
-      doInput(conflict[0], cnt);
-      if (isEnabled(conflict[0], CALC_MIDSTEP) < 1){conflict.erase(conflict.begin());}
+      counter[conflict[i]] += cnt;//mark transition
+      doInput(conflict[i], cnt);
+      if (isEnabled(conflict[i], CALC_MIDSTEP) < 1){conflict.erase(conflict.begin() + i);}
     }
   }
 
