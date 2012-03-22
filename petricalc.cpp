@@ -288,7 +288,6 @@ bool PetriNet::CalculateStep(){
   std::deque<unsigned int>::iterator dT;
   std::map<unsigned int, unsigned long long int> counter;
   std::map<unsigned int, unsigned long long int>::iterator cit;
-  std::map<unsigned int, PetriPlace> TMPplaces = places;//make backup for restoring later
   
   
   //Every transition is checked for enabledness, and made part of a subset consisting of only enabled transitions.
@@ -331,18 +330,16 @@ bool PetriNet::CalculateStep(){
     if (cnt < 1){
       conflict.erase(conflict.begin());
     }else{
-      counter[conflict[0]] += 1;//mark transition
-      doInput(conflict[0], 1);
+      cnt = (rand() % cnt) + 1;//do random amount of times
+      counter[conflict[0]] += cnt;//mark transition
+      doInput(conflict[0], cnt);
       if (isEnabled(conflict[0], CALC_MIDSTEP) < 1){conflict.erase(conflict.begin());}
     }
   }
 
-  //cancel operations so far...
-  places = TMPplaces;
-  
   //For every marking on every transition, calculate appropiate output tokes and output them.
   for (cit = counter.begin(); cit != counter.end(); cit++){
-    doInputOutput(cit->first, cit->second);
+    doOutput(cit->first, cit->second);
   }
   
   //Clear all markings, we are now ready for the next calculating step.
@@ -429,27 +426,30 @@ unsigned long long int PetriNet::isEnabled(unsigned int T, calcType C){
     return 0;/// \todo guard support
   }else{
     for (edgeit = transitions[T].inputs.begin(); edgeit != transitions[T].inputs.end(); edgeit++){
+      unsigned long long int marking = places[edges[*edgeit].source].iMarking;
+      unsigned long long int multiplicity = edges[*edgeit].multiplicity;
       //skip read edges if calculation type is midstep
       if ((C == CALC_MIDSTEP) && (edges[*edgeit].etype == EDGE_ACTIVATOR)){continue;}
       //skip equals edges if calculation type is midstep
       if ((C == CALC_MIDSTEP) && (edges[*edgeit].etype == EDGE_EQUAL)){continue;}
 
       //no expression, just a number
-      if (edges[*edgeit].multiplicity > 0){
+      if (multiplicity > 0){
         //inhibitor arcs disable firing if filled, unaffect firing if not filled
         if (edges[*edgeit].etype == EDGE_INHIBITOR){
-          if (places[edges[*edgeit].source].iMarking < edges[*edgeit].multiplicity){continue;}
+          if (marking < multiplicity){continue;}
           return 0;
         }
         //equal arcs disable firing if not equal, unaffect firing if they are
         if (edges[*edgeit].etype == EDGE_EQUAL){
-          if (places[edges[*edgeit].source].iMarking == edges[*edgeit].multiplicity){continue;}
+          if (marking == multiplicity){continue;}
           return 0;
         }
-        if (places[edges[*edgeit].source].iMarking >= edges[*edgeit].multiplicity){
+        if (marking >= multiplicity){
           //if edgetype is EDGE_ACTIVATOR, fire count is not affected as long as it is enabled
           if (edges[*edgeit].etype == EDGE_ACTIVATOR){continue;}
-          unsigned long long int tmp = places[edges[*edgeit].source].iMarking / edges[*edgeit].multiplicity;
+          unsigned long long int tmp = 0;
+          if (multiplicity == 1){tmp = marking;}else{tmp = marking/multiplicity;}
           if (tmp < fire_count){fire_count = tmp;}//set fire_count to the minimum count of the input edges
         }else{
           return 0;
@@ -514,7 +514,7 @@ void PetriNet::doInput(unsigned int T, unsigned long long int cnt){
   }
 }
 
-void PetriNet::doInputOutput(unsigned int T, unsigned long long int cnt){
+void PetriNet::doOutput(unsigned int T, unsigned long long int cnt){
   #if DEBUG >= 5
   fprintf(stderr, "Transition %s fires %u times (%u inputs, %u outputs):\n", transitions[T].name.c_str(), cnt, (unsigned int)transitions[T].inputs.size(), (unsigned int)transitions[T].outputs.size());
   #endif
@@ -523,25 +523,6 @@ void PetriNet::doInputOutput(unsigned int T, unsigned long long int cnt){
   if (transitions[T].guard.size() > 0){
     return;//we don't support guards just yet...
   }else{
-    for (edgeit = transitions[T].inputs.begin(); edgeit != transitions[T].inputs.end(); edgeit++){
-      if (edges[*edgeit].multiplicity > 0){
-        //remove input, only if edgetype is not EDGE_ACTIVATOR or EDGE_INHIBITOR or EDGE_EQUAL
-        if (edges[*edgeit].etype == EDGE_ACTIVATOR){continue;}
-        if (edges[*edgeit].etype == EDGE_INHIBITOR){continue;}
-        if (edges[*edgeit].etype == EDGE_EQUAL){continue;}
-        places[edges[*edgeit].source].iMarking -= edges[*edgeit].multiplicity * cnt;
-        //for reset edges, remove all tokens
-        if (edges[*edgeit].etype == EDGE_RESET){places[edges[*edgeit].source].iMarking = 0;}
-        #if DEBUG >= 5
-        fprintf(stderr, "Lowered place %s by %u X %u to %u...\n", places[edges[*edgeit].source].name.c_str(), edges[*edgeit].multiplicity, cnt, places[edges[*edgeit].source].iMarking);
-        #endif
-      }else{
-        //try to match an input, we assume this is successful because isEnabled was already called.
-        findInput(edges[*edgeit].source, edges[*edgeit].expression, vars);
-        //inputs are now matched, we can fill in the variables and remove the corresponding token
-        places[edges[*edgeit].source].marking[fillVars(edges[*edgeit].expression, vars)]--;
-      }
-    }
     for (edgeit = transitions[T].outputs.begin(); edgeit != transitions[T].outputs.end(); edgeit++){
       if (edges[*edgeit].multiplicity > 0){
         places[edges[*edgeit].target].iMarking += edges[*edgeit].multiplicity * cnt;

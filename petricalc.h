@@ -90,6 +90,6 @@ private:
     void addVariable(TiXmlNode * N);
     bool findInput(unsigned int src, std::string expression, std::map<std::string, std::string> & vars);
     void doInput(unsigned int T, unsigned long long int cnt);
-    void doInputOutput(unsigned int T, unsigned long long int cnt);
+    void doOutput(unsigned int T, unsigned long long int cnt);
     TiXmlDocument myXML;
 };//PetriNet
