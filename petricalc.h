@@ -5,6 +5,31 @@
 #include <string>
 #include "tinyxml.h"
 
+/// Holds color information, but not what the color is.
+/// We restrict colors to numbers, so we can keep our sanity.
+class PetriColor{
+  private:
+    std::vector<unsigned int> numbers;
+  public:
+    friend bool operator<(PetriColor &left, PetriColor &right);
+    std::string toString();
+};
+
+/// Holds marking information for a single place.
+/// A marking is either a simple number (non-colored nets) or
+/// a list of markings for (a product of) numbers.
+class PetriMarking{
+  private:
+    std::map<PetriColor, PetriMarking> val;
+  public:
+    void Add(unsigned long long int i);
+    void Rem(unsigned long long int i);
+    void Add(unsigned int x, unsigned long long int i);
+    void Rem(unsigned int x, unsigned long long int i);
+    void Add(unsigned int c, unsigned int c, unsigned long long int i);
+    void Rem(unsigned int c, unsigned long long int i);
+};
+
 /// A PetriNet Place - holds a single place's state information.
 class PetriPlace{
   public:
