@@ -2,9 +2,20 @@
 #include <deque>
 #include <algorithm>
 
-// intern werken met range arcs werken die values hebben voor effect
-// uitwerken formeel van hoe alles werkt
-// updaten eerste document
+
+PetriArc::PetriArc(unsigned long long rLow, unsigned long long rHigh, long long e){
+  rangeLow = rLow;
+  rangeHigh = rHigh;
+  effect = e;
+}
+
+bool PetriArc::rangeFunction(unsigned long long m){
+  return (m >= rangeLow && m <= rangeHigh);
+}
+
+void PetriArc::effectFunction(unsigned long long & m){
+  m += effect;
+}
 
 PetriNet::PetriNet(std::string XML){
   myXML = TiXmlDocument(XML);
@@ -25,11 +36,6 @@ PetriNet::PetriNet(std::string XML){
     exit(42);
   }
   parseEdges(c);
-  c = e->FirstChild("metadataclasses");
-  if (c){
-    parseMeta(c);
-  }
-  LoadCache();
 };
 
 void PetriNet::parseNodes(TiXmlNode * N){
@@ -56,84 +62,66 @@ void PetriNet::parseNodes(TiXmlNode * N){
 
 void PetriNet::addPlace(TiXmlNode * N){
   TiXmlElement * e;
-  PetriPlace P;
-  unsigned int initial = 0;
   e = N->ToElement();
   const char * id = e->Attribute("id");
   if (!id){return;}
-  P.id = atoi(id);
+  unsigned long long ID = atoi(id);
   TiXmlNode * c = 0;
   while ((c = N->IterateChildren(c))){
     e = c->ToElement();
     if (!e){continue;}
     if (!e->Attribute("name")){continue;}
     std::string name = e->Attribute("name");
-    if (name == "Colorset"){
-      P.color = e->GetText();
-    }
     if (name == "Name"){
-      P.name = e->GetText();
+      places[ID] = e->GetText();
     }
     if (name == "ID"){
-      if (P.name == ""){
-        P.name = std::string("place_")+e->GetText();
+      if (places[ID] == ""){
+        places[ID] = std::string("place_")+e->GetText();
       }
     }
     if (name == "Marking"){
-      P.iMarking = atoi(e->GetText());
-    }
-    if (name == "MarkingList"){
-      TiXmlNode * g = 0, * s = c->FirstChild()->LastChild();//get the table body
-      while ((g = s->IterateChildren(g))){
-        std::string marking;
-        unsigned int mcount = 0;
-        marking = g->FirstChild()->ToElement()->GetText();
-        mcount = atoi(g->LastChild()->ToElement()->GetText());
-        fprintf(stderr, "  Token for next place: %s, %u times\n", marking.c_str(), mcount);
-        P.marking.insert(std::pair<std::string, unsigned int>(marking, mcount));
-        initial += mcount;
-      }
+      marking[ID] = atoi(e->GetText());
     }
   }
-  places.insert(std::pair<unsigned int, PetriPlace>(P.id, P));
   #if DEBUG >= 10
-  fprintf(stderr, "Added place %s ID %u, color %s, %u initial tokens\n", P.name.c_str(), P.id, P.color.c_str(), initial+P.iMarking);
+  fprintf(stderr, "Added place %s ID %llu, %llu initial tokens\n", places[ID].c_str(), ID, marking[ID]);
   #endif
 }
 
 void PetriNet::addTransition(TiXmlNode * N){
   TiXmlElement * e;
-  PetriTrans T;
   e = N->ToElement();
   const char * id = e->Attribute("id");
   if (!id){return;}
-  T.id = atoi(id);
+  unsigned long long ID = atoi(id);
   TiXmlNode * c = 0;
   while ((c = N->IterateChildren(c))){
     e = c->ToElement();
     if (!e){continue;}
     if (!e->Attribute("name")){continue;}
     std::string name = e->Attribute("name");
-    if (name == "GuardList"){
-      TiXmlNode * g = 0, * s = c->FirstChild()->LastChild();//get the table body
-      while ((g = s->IterateChildren(g))){
-        T.guard = g->LastChild()->ToElement()->GetText();
-      }
-    }
     if (name == "Name"){
-      T.name = e->GetText();
+      transitions[ID] = e->GetText();
     }
     if (name == "ID"){
-      if (T.name == ""){
-        T.name = std::string("trans_")+e->GetText();
+      if (transitions[ID] == ""){
+        transitions[ID] = std::string("trans_")+e->GetText();
       }
     }
   }
-  transitions.insert(std::pair<unsigned int, PetriTrans>(T.id, T));
   #if DEBUG >= 10
-  fprintf(stderr, "Added transition %s ID %u, guard %s\n", T.name.c_str(), T.id, T.guard.c_str());
+  fprintf(stderr, "Added transition %s ID %llu\n", transitions[ID].c_str(), ID);
   #endif
 }
+
+enum edgeType{
+  EDGE_NORMAL,
+  EDGE_ACTIVATOR,
+  EDGE_INHIBITOR,
+  EDGE_RESET,
+  EDGE_EQUAL
+};
 
 void PetriNet::parseEdges(TiXmlNode * N){
   TiXmlNode * c = 0, * d = 0;
@@ -165,25 +153,25 @@ void PetriNet::parseEdges(TiXmlNode * N){
     }
     //other types not supported yet
   }
-  fprintf(stderr, "Loaded %u edges\n", (unsigned int)edges.size());
 }
 
-void PetriNet::addEdge(TiXmlNode * N, edgeType E){
+void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
   TiXmlElement * e;
-  PetriEdge R;
-  R.multiplicity = 0;
   e = N->ToElement();
   const char * id = e->Attribute("id");
   if (!id){return;}
-  R.id = atoi(id);
-  R.source = atoi(e->Attribute("source"));
-  R.target = atoi(e->Attribute("target"));
-  R.etype = E;
-  if (transitions.find(R.source) != transitions.end()){
-    transitions[R.source].outputs.insert(R.id);
+  unsigned long long SOURCE = atoi(e->Attribute("source"));
+  unsigned long long TARGET = atoi(e->Attribute("target"));
+  unsigned long long transition;
+  unsigned long long place;
+  long long multiplicity = 1;
+  if (transitions.count(SOURCE)){
+    transition = SOURCE;
+    place = TARGET;
   }
-  if (transitions.find(R.target) != transitions.end()){
-    transitions[R.target].inputs.insert(R.id);
+  if (places.count(SOURCE)){
+    transition = TARGET;
+    place = SOURCE;
   }
   TiXmlNode * c = 0;
   while ((c = N->IterateChildren(c))){
@@ -191,396 +179,180 @@ void PetriNet::addEdge(TiXmlNode * N, edgeType E){
     if (!e){continue;}
     if (!e->Attribute("name")){continue;}
     std::string name = e->Attribute("name");
-    if (name == "ExpressionList"){
-      TiXmlNode * g = 0, * s = c->FirstChild()->LastChild();//get the table body
-      while ((g = s->IterateChildren(g))){
-        R.expression = g->LastChild()->ToElement()->GetText();
-      }
-    }
     if (name == "Multiplicity"){
-      R.multiplicity = atoi(e->GetText());
+      multiplicity = atoi(e->GetText());
     }
   }
-  if ((R.expression == "") && !R.multiplicity){R.multiplicity = 1;}
-  edges.insert(std::pair<unsigned int, PetriEdge>(R.id, R));
-  #if DEBUG >= 10
-  fprintf(stderr, "Added edge from %u to %u, multiplicity %u, expression %s\n", R.source, R.target, R.multiplicity, R.expression.c_str());
-  #endif
-}
 
-void PetriNet::parseMeta(TiXmlNode * N){
-  TiXmlNode * c = 0, * d = 0;
-  TiXmlElement * e;
-  while ((c = N->IterateChildren(c))){
-    e = c->ToElement();
-    if (!e){continue;}
-    if (!e->Attribute("name")){return;}
-    std::string name = e->Attribute("name");
-    if (name == "Basic Colorset Class"){
-      d = 0;
-      while ((d = c->IterateChildren(d))){addColset(d);}
-    }
-    if (name == "Structured Colorset Class"){
-      d = 0;
-      while ((d = c->IterateChildren(d))){addColset(d);}
-    }
-    if (name == "Variable Class"){
-      d = 0;
-      while ((d = c->IterateChildren(d))){addVariable(d);}
-    }
-    //other types not supported yet
+  //If the place is the source, everything is negative
+  if (place == SOURCE){
+    multiplicity *= -1;
   }
-}
-
-void PetriNet::addColset(TiXmlNode * N){
-  TiXmlElement * e;
-  PetriColor C;
-  TiXmlNode * c = 0;
-  while ((c = N->IterateChildren(c))){
-    e = c->ToElement();
-    if (!e){continue;}
-    if (!e->Attribute("name")){continue;}
-    std::string name = e->Attribute("name");
-    if (name == "ColorsetList" || name == "StructuredColorsetList"){
-      TiXmlNode * g = 0, * s = c->FirstChild()->LastChild();//get the table body
-      while ((g = s->IterateChildren(g))){
-        C.name = g->FirstChild()->ToElement()->GetText();
-        C.type = g->FirstChild()->NextSibling()->ToElement()->GetText();
-        C.value = g->LastChild()->ToElement()->GetText();
-        colors.insert(std::pair<std::string, PetriColor>(C.name, C));
-        #if DEBUG >= 10
-        fprintf(stderr, "Added colorset %s, type %s, value %s\n", C.name.c_str(), C.type.c_str(), C.value.c_str());
-        #endif
-      }
-    }
-  }
-}
-
-void PetriNet::addVariable(TiXmlNode * N){
-  TiXmlElement * e;
-  PetriColor C;
-  TiXmlNode * c = 0;
-  while ((c = N->IterateChildren(c))){
-    e = c->ToElement();
-    if (!e){continue;}
-    if (!e->Attribute("name")){continue;}
-    std::string name = e->Attribute("name");
-    if (name == "VariableList"){
-      TiXmlNode * g = 0, * s = c->FirstChild()->LastChild();//get the table body
-      while ((g = s->IterateChildren(g))){
-        std::string name, type;
-        name = g->FirstChild()->ToElement()->GetText();
-        type = g->FirstChild()->NextSibling()->ToElement()->GetText();
-        variables.insert(std::pair<std::string, std::string>(name, type));
-        #if DEBUG >= 10
-        fprintf(stderr, "Added variable %s, type %s\n", name.c_str(), type.c_str());
-        #endif
-      }
-    }
-  }
-}
-
-bool PetriNet::CalculateStep(){
-  std::map<unsigned int, PetriTrans>::iterator T;
-  std::set<unsigned int> enabled;
-  std::set<unsigned int>::iterator sT;
-  std::vector<unsigned int> conflict;
-  std::vector<unsigned int>::iterator dT;
-  std::map<unsigned int, unsigned long long int> counter;
-  std::map<unsigned int, unsigned long long int>::iterator cit;
   
+  unsigned long long aRLow, aRHigh;
+  long long aEffect;
+
+  if (E == EDGE_NORMAL){
+    if (multiplicity < 0){
+      aRLow = -multiplicity;
+    }else{
+      aRLow = 0;
+    }
+    aRHigh = 0xFFFFFFFFFFFFFFFFull;
+    aEffect = multiplicity;
+  }
+  if (E == EDGE_ACTIVATOR){
+    if (multiplicity < 0){
+      aRLow = -multiplicity;
+    }else{
+      aRLow = multiplicity;
+    }
+    aRHigh = 0xFFFFFFFFFFFFFFFFull;
+    aEffect = 0;
+  }
+  if (E == EDGE_INHIBITOR){
+    if (multiplicity < 0){
+      aRHigh = -multiplicity - 1;
+    }else{
+      aRHigh = multiplicity - 1;
+    }
+    aRLow = 0;
+    aEffect = 0;
+  }
+  if (E == EDGE_EQUAL){
+    if (multiplicity < 0){
+      arcs[transition][place].rangeLow = -multiplicity;
+      arcs[transition][place].rangeHigh = -multiplicity;
+    }else{
+      arcs[transition][place].rangeLow = multiplicity;
+      arcs[transition][place].rangeHigh = multiplicity;
+    }
+    arcs[transition][place].effect = 0;
+  }
+  if (E == EDGE_RESET){
+    if (multiplicity < 0){
+      arcs[transition][place].rangeLow = -multiplicity;
+    }else{
+      arcs[transition][place].rangeLow = 0;
+    }
+    arcs[transition][place].rangeHigh = 0xFFFFFFFFFFFFFFFFull;
+    arcs[transition][place].effect = -0xFFFFFFFFFFFFFFll;
+  }
+
+  #if DEBUG >= 10
+  fprintf(stderr, "Added arc between transition %llu and place %llu: ((%llu, %llu), %lli)\n", transition, place, arcs[transition][place].rangeLow, arcs[transition][place].rangeHigh, arcs[transition][place].effect);
+  #endif
+  arcs[transition][place] = PetriArc(aRLow, aRHigh, aEffect);
+  arcs[transition][place].rangeHigh = aRHigh;
+  arcs[transition][place].effect = aEffect;
+}
+
+bool PetriNet::calculateStep(){
+// Definition 8: To calculate a single transition step for a given marked Petri net N = ((P, T, A), (D, fr , fe, L, ⊗, I), M ), do the following:
+// - Create a list E of all enabled transitions, using the method described in Definition 5 to determine enabledness for all t ∈ T .
+// - Pick any one transition t ∈ E and fire it using the method described in Definition 6.
+
+  std::map<unsigned long long, std::map<unsigned long long, PetriArc> >::iterator T;
+  std::map<unsigned long long, PetriArc>::iterator A;
+  std::set<unsigned long long> enabled; //Enabled transitions
+  std::set<unsigned long long>::iterator selector;
   
   //Every transition is checked for enabledness, and made part of a subset consisting of only enabled transitions.
-  for (T = transitions.begin(); T != transitions.end(); T++){
+  for (T = arcs.begin(); T != arcs.end(); T++){
     if (isEnabled(T->first)){enabled.insert(T->first);}
   }
+  #if DEBUG >= 5
+  fprintf(stderr, "Stepping: %u transitions enabled\n", (unsigned int)enabled.size());
+  #endif
+  //Nothing enabled? We're done. Cancel running net.
   if (enabled.size() == 0){return false;}
 
-  //for all enabled transitions, check if they conflict with any of the other enabled transitions
-  for (sT = enabled.begin(); sT != enabled.end(); sT++){
-    if (conflicts(*sT, enabled)){
-      conflict.push_back(*sT);//add to set of conflicting transitions
-    }
-  }
+  selector = enabled.begin();
+  std::advance(selector, rand() % enabled.size());
+
 
   #if DEBUG >= 5
-  fprintf(stderr, "Stepping: %u transitions enabled, %u in conflict\n", (unsigned int)enabled.size(), (unsigned int)conflict.size());
+  fprintf(stderr, "Stepping: picked transition %llu\n", *selector);
   #endif
 
-  //remove conflicting transitions from set of enabled transitions
-  for (dT = conflict.begin(); dT != conflict.end(); dT++){enabled.erase(*dT);}
-
-  //all non-conflicting transitions consume their input as many times as possible
-  //no output is done just yet
-  while (enabled.size() > 0){
-    sT = enabled.begin();
-    unsigned long long int cnt = isEnabled(*sT);
-    if (cnt > 0){
-      counter[*sT] += cnt;//mark transition
-      doInput(*sT, cnt);
-    }
-    enabled.erase(sT);//transition is never enabled anymore at this point
-  }
-
-  //all conflicting transitions consume their input in random order, one time
-  //calculations are done as "midstep" type to prevent activator arcs from disabling already enabled edges
-  while (conflict.size() > 0){
-    unsigned int i = rand() % conflict.size();
-    unsigned long long int cnt = isEnabled(conflict[i], CALC_MIDSTEP);
-    if (cnt < 1){
-      conflict.erase(conflict.begin() + i);
-    }else{
-      cnt = (rand() % cnt) + 1;//do random amount of times
-      counter[conflict[i]] += cnt;//mark transition
-      doInput(conflict[i], cnt);
-      if (isEnabled(conflict[i], CALC_MIDSTEP) < 1){conflict.erase(conflict.begin() + i);}
-    }
-  }
-
-  //For every marking on every transition, calculate appropiate output tokes and output them.
-  for (cit = counter.begin(); cit != counter.end(); cit++){
-    doOutput(cit->first, cit->second);
+  //Run the effect function on each arc of the chosen transition
+  std::map<unsigned long long, PetriArc> & selected = arcs[*selector];
+  for (A = selected.begin(); A != selected.end(); A++){
+    A->second.effectFunction(marking[A->first]);
   }
   
-  //Clear all markings, we are now ready for the next calculating step.
+  //Step completed.
   return true;
 }
 
-void PetriNet::LoadCache(){
-  std::set<unsigned int>::iterator edgeit;
-  std::set<unsigned int>::iterator edgeit2;
-  std::map<unsigned int, PetriTrans>::iterator transIt;
-  std::map<unsigned int, PetriTrans>::iterator transIt2;
-  for (transIt = transitions.begin(); transIt != transitions.end(); transIt++){
-    for (edgeit = transIt->second.inputs.begin(); edgeit != transIt->second.inputs.end(); edgeit++){
-      if (edges[*edgeit].etype == EDGE_ACTIVATOR){continue;}//these arcs are not affected by conflicts
-      if (edges[*edgeit].etype == EDGE_INHIBITOR){continue;}//these arcs are not affected by conflicts
-      if (edges[*edgeit].etype == EDGE_EQUAL){continue;}//these arcs are not affected by conflicts
-      if (edges[*edgeit].multiplicity > 0){
-        for (transIt2 = transitions.begin(); transIt2 != transitions.end(); transIt2++){
-          if (transIt2 != transIt){//skip self
-            for (edgeit2 = transIt2->second.inputs.begin(); edgeit2 != transIt2->second.inputs.end(); edgeit2++){
-              if (edges[*edgeit2].etype == EDGE_INHIBITOR){continue;}//these arcs are not affected by conflicts
-              if (edges[*edgeit].source == edges[*edgeit2].source){
-                transIt->second.conflicts_with.insert(transIt2->first);
-                break;
-              }
-            }
-          }
-        }
-      }else{
-        /// \todo Conflict checking for colored nets is missing
-        //assuming in conflict with all for now
-        for (transIt2 = transitions.begin(); transIt2 != transitions.end(); transIt2++){
-          if (transIt2 != transIt){//skip self
-            transIt->second.conflicts_with.insert(transIt2->first);
-          }
-        }
-      }
-    }
+bool PetriNet::isEnabled(unsigned int T){
+// Definition 5: In a marked Petri net N = ((P, T, A), (D, fr , fe , L, ⊗, I), M ) a transition t ∈ T is enabled when for all p ∈ P such that p‡t, fR(aR , M (p)) = true, where a is the pt-combined arc label.
+
+  //We consider transitions without arcs to not be enabled, since that is the only thing that makes sense.
+  if (!arcs[T].size()){
+    return false;
   }
+
+  // Loop over all p ∈ P such that p‡t
+  std::map<unsigned long long, PetriArc>::iterator A;
+  for (A = arcs[T].begin(); A != arcs[T].end(); A++){
+    //Check fR(aR , M (p)), if false, return false
+    //We do not calculate the pt-combined arc label here, since it's been pre-calculated during net load already for each transition
+    if (!A->second.rangeFunction(marking[A->first])){return false;}
+  }
+
+  //only if all fR(aR , M (p)) are true, return true
+  return true;
 }
 
-bool PetriNet::conflicts(unsigned int transition, std::set<unsigned int> & checked_transitions){
-  std::set<unsigned int>::iterator checkit;
-  //check the cache and checked_transitions for matching transitions
-  //any match = conflicting transition
-  if (checked_transitions.size() > transitions[transition].conflicts_with.size()){
-    for (checkit = transitions[transition].conflicts_with.begin(); checkit != transitions[transition].conflicts_with.end(); checkit++){
-      if (checked_transitions.count(*checkit) > 0){return true;}
-    }
-  }else{
-    for (checkit = checked_transitions.begin(); checkit != checked_transitions.end(); checkit++){
-      if (transitions[transition].conflicts_with.count(*checkit) > 0){return true;}
-    }
-  }
-  //no matches = no conflict
-  return false;
-}
+void PetriNet::fire(unsigned int T){
+// Definition 6 In a marked Petri net N = ((P, T, A), (D, fr , fe , L, ⊗, I), M ) the firing of a transition t ∈ T is changing M into M 0 so that:
+// - ∀p ∈ P such that p ‡ t, M 0(p) = fE (aE , M (p))
+// - ∀p ∈ P such that p † t, M 0(p) = M (p)
+// Where a is the pt-combined arc label.
 
-bool PetriNet::findInput(unsigned int src, std::string expression, std::map<std::string, std::string> & vars){
-  std::map<std::string, unsigned int>::iterator it;
-  for (it = places[src].marking.begin(); it != places[src].marking.end(); it++){
-    if (it->second < 1){continue;}
-    if (expression.size() == 1){//we assume variable when the expression is one character
-      if (vars[expression] == ""){
-        vars[expression] = it->first;
-        return true;
-      }else{
-        if (vars[expression] == it->first){return true;}
-      }
-    }else{
-      //TODO: parse other types of expressions
-    }
-  }
-  return false;
-}
-
-/// Returns how many times this expression can fire currently
-unsigned long long int PetriNet::isEnabled(unsigned int T, calcType C){
-  /// \todo Optimize this by only checking changed transitions (changed input/output) every iteration
-  std::map<std::string, std::string> vars;
-  std::set<unsigned int>::iterator edgeit;
-  unsigned long long int fire_count = 0xFFFFFFF; //start with maximum possible
-  if (transitions[T].guard.size() > 0){
-    return 0;/// \todo guard support
-  }else{
-    for (edgeit = transitions[T].inputs.begin(); edgeit != transitions[T].inputs.end(); edgeit++){
-      unsigned long long int marking = places[edges[*edgeit].source].iMarking;
-      unsigned long long int multiplicity = edges[*edgeit].multiplicity;
-      //skip read edges if calculation type is midstep
-      if ((C == CALC_MIDSTEP) && (edges[*edgeit].etype == EDGE_ACTIVATOR)){continue;}
-      //skip equals edges if calculation type is midstep
-      if ((C == CALC_MIDSTEP) && (edges[*edgeit].etype == EDGE_EQUAL)){continue;}
-
-      //no expression, just a number
-      if (multiplicity > 0){
-        //inhibitor arcs disable firing if filled, unaffect firing if not filled
-        if (edges[*edgeit].etype == EDGE_INHIBITOR){
-          if (marking < multiplicity){continue;}
-          return 0;
-        }
-        //equal arcs disable firing if not equal, unaffect firing if they are
-        if (edges[*edgeit].etype == EDGE_EQUAL){
-          if (marking == multiplicity){continue;}
-          return 0;
-        }
-        if (marking >= multiplicity){
-          //if edgetype is EDGE_ACTIVATOR, fire count is not affected as long as it is enabled
-          if (edges[*edgeit].etype == EDGE_ACTIVATOR){continue;}
-          unsigned long long int tmp = 0;
-          if (multiplicity == 1){tmp = marking;}else{tmp = marking/multiplicity;}
-          if (tmp < fire_count){fire_count = tmp;}//set fire_count to the minimum count of the input edges
-        }else{
-          return 0;
-        }
-      }else{
-        fprintf(stderr, "Error: not a multiplicity\n");
-        //try to match an input
-        if (!findInput(edges[*edgeit].source, edges[*edgeit].expression, vars)){
-          //if no match can be made, this transition can't fire
-          return 0;
-        }else{
-          if (fire_count > 0){fire_count = 1;}//do one at a time for nontrivial cases
-        }
-      }
-    }
-  }
-  if (fire_count == 0xFFFFFFFF){
-    //this makes no sense
-    std::cerr << "A transition could fire unboundedly. Don't do that." << std::endl;
-    exit(999);
-  }
-  return fire_count;
-}
-
-std::string fillVars(std::string S, std::map<std::string, std::string> vars){
-  std::map<std::string, std::string>::iterator it;
-  //replace all variables with their values in the given string, then return it
-  for (it = vars.begin(); it != vars.end(); it++){
-    while (S.find(it->first) != std::string::npos){
-      S.replace(S.find(it->first), it->first.size(), it->second);
-    }
-  }
-  return S;
-}
-
-void PetriNet::doInput(unsigned int T, unsigned long long int cnt){
-  std::map<std::string, std::string> vars;
-  std::set<unsigned int>::iterator edgeit;
   #if DEBUG >= 5
-  fprintf(stderr, "Doing input step for transition %s...\n", transitions[T].name.c_str());
+  fprintf(stderr, "Doing input step for transition %s...\n", transitions[T].c_str());
   #endif
-  if (transitions[T].guard.size() > 0){
-    fprintf(stderr, "Guard unsupported!\n");
-    return;//we don't support guards just yet...
-  }else{
-    for (edgeit = transitions[T].inputs.begin(); edgeit != transitions[T].inputs.end(); edgeit++){
-      if (edges[*edgeit].multiplicity > 0){
-        //remove input, only if edgetype is not EDGE_ACTIVATOR or EDGE_INHIBITOR or EDGE_EQUAL
-        if (edges[*edgeit].etype == EDGE_ACTIVATOR){continue;}
-        if (edges[*edgeit].etype == EDGE_INHIBITOR){continue;}
-        if (edges[*edgeit].etype == EDGE_EQUAL){continue;}
-        places[edges[*edgeit].source].iMarking -= edges[*edgeit].multiplicity * cnt;
-        //for reset edges, remove all tokens
-        if (edges[*edgeit].etype == EDGE_RESET){places[edges[*edgeit].source].iMarking = 0;}
-      }else{
-        //try to match an input, we assume this is successful because isEnabled was already called.
-        findInput(edges[*edgeit].source, edges[*edgeit].expression, vars);
-        //inputs are now matched, we can fill in the variables and remove the corresponding token
-        places[edges[*edgeit].source].marking[fillVars(edges[*edgeit].expression, vars)]--;
-      }
-    }
-  }
 }
 
-void PetriNet::doOutput(unsigned int T, unsigned long long int cnt){
-  #if DEBUG >= 5
-  fprintf(stderr, "Transition %s fires %u times (%u inputs, %u outputs):\n", transitions[T].name.c_str(), cnt, (unsigned int)transitions[T].inputs.size(), (unsigned int)transitions[T].outputs.size());
-  #endif
-  std::map<std::string, std::string> vars;
-  std::set<unsigned int>::iterator edgeit;
-  if (transitions[T].guard.size() > 0){
-    return;//we don't support guards just yet...
-  }else{
-    for (edgeit = transitions[T].outputs.begin(); edgeit != transitions[T].outputs.end(); edgeit++){
-      if (edges[*edgeit].multiplicity > 0){
-        places[edges[*edgeit].target].iMarking += edges[*edgeit].multiplicity * cnt;
-        #if DEBUG >= 5
-        fprintf(stderr, "Upped place %s by %u X %u to %u...\n", places[edges[*edgeit].target].name.c_str(), edges[*edgeit].multiplicity, cnt, places[edges[*edgeit].target].iMarking);
-        #endif
-      }else{
-        //fill in the variables and add the corresponding token
-        places[edges[*edgeit].target].marking[fillVars(edges[*edgeit].expression, vars)]++;
-      }
-    }
-  }
-}
-
-void PetriNet::PrintState(){
-  std::map<unsigned int, PetriPlace>::iterator pIter;
-  for (pIter = places.begin(); pIter != places.end(); pIter++){
-    if (pIter->second.marking.empty()){
-      printf("%llu\t", pIter->second.iMarking);
-    }else{
-      printf("colored_unsupported\t");
-    }
+void PetriNet::printState(){
+  std::map<unsigned long long, unsigned long long>::iterator i;
+  for (i = marking.begin(); i != marking.end(); i++){
+    printf("%lli\t", i->second);
   }
   printf("\n");
 }
 
-void PetriNet::PrintStateHeader(){
-  std::map<unsigned int, PetriPlace>::iterator pIter;
-  for (pIter = places.begin(); pIter != places.end(); pIter++){
-    printf("%s\t", pIter->second.name.c_str());
+void PetriNet::printStateHeader(){
+  std::map<unsigned long long, unsigned long long>::iterator i;
+  for (i = marking.begin(); i != marking.end(); i++){
+    printf("%s\t", places[i->first].c_str());
   }
   printf("\n");
 }
 
 unsigned int PetriNet::findPlace(std::string placename){
-  std::map<unsigned int, PetriPlace>::iterator pIter;
+  std::map<unsigned long long, std::string>::iterator pIter;
   for (pIter = places.begin(); pIter != places.end(); pIter++){
-    if (pIter->second.name == placename){return pIter->second.id;}
+    if (pIter->second == placename){return pIter->first;}
   }
   return 0;
 }
 
-void PetriNet::PrintState(std::map<std::string, unsigned int> & cellnames){
+void PetriNet::printState(std::map<std::string, unsigned int> & cellnames){
   std::map<std::string, unsigned int>::iterator nIter;
   for (nIter = cellnames.begin(); nIter != cellnames.end(); nIter++){
-    if (places[nIter->second].marking.empty()){
-      printf("%llu\t", places[nIter->second].iMarking);
-    }else{
-      printf("colored_unsupported\t");
-    }
+    printf("%llu\t", marking[nIter->second]);
   }
   printf("\n");
 }
 
-void PetriNet::PrintStateHeader(std::map<std::string, unsigned int> & cellnames){
+void PetriNet::printStateHeader(std::map<std::string, unsigned int> & cellnames){
   std::map<std::string, unsigned int>::iterator nIter;
   for (nIter = cellnames.begin(); nIter != cellnames.end(); nIter++){
     printf("%s\t", nIter->first.c_str());
   }
   printf("\n");
 }
+

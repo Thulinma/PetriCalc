@@ -5,83 +5,20 @@
 #include <string>
 #include "tinyxml.h"
 
-/// Holds color information, but not what the color is.
-/// We restrict colors to numbers, so we can keep our sanity.
-class PetriColor{
-  private:
-    std::vector<unsigned int> numbers;
+/// A PetriNet arc - contains the connected place, range and effect.
+class PetriArc{
   public:
-    friend bool operator<(PetriColor &left, PetriColor &right);
-    std::string toString();
-};
-
-/// Holds marking information for a single place.
-/// A marking is either a simple number (non-colored nets) or
-/// a list of markings for (a product of) numbers.
-class PetriMarking{
-  private:
-    std::map<PetriColor, PetriMarking> val;
-  public:
-    void Add(unsigned long long int i);
-    void Rem(unsigned long long int i);
-    void Add(unsigned int x, unsigned long long int i);
-    void Rem(unsigned int x, unsigned long long int i);
-    void Add(unsigned int c, unsigned int c, unsigned long long int i);
-    void Rem(unsigned int c, unsigned long long int i);
-};
-
-/// A PetriNet Place - holds a single place's state information.
-class PetriPlace{
-  public:
-    unsigned int id; ///< Internal ID
-    std::string name; ///< Human-readable name
-    std::string color; ///< Colorset
-    unsigned long long int iMarking; ///< Integer marking
-    std::map<std::string, unsigned int> marking; ///< Colored marking
-};
-
-/// A PetriNet Transition - holds a single transitions state information.
-class PetriTrans{
-  public:
-    unsigned int id;
-    std::string name;
-    std::string guard;
-    std::set<unsigned int> inputs;
-    std::set<unsigned int> outputs;
-    std::set<unsigned int> conflicts_with;
-};
-
-/// Contains possible edge types.
-enum edgeType{
-  EDGE_NORMAL,
-  EDGE_ACTIVATOR,
-  EDGE_INHIBITOR,
-  EDGE_RESET,
-  EDGE_EQUAL
+    PetriArc(unsigned long long rLow, unsigned long long rHigh, long long e);
+    unsigned long long rangeLow;
+    unsigned long long rangeHigh;
+    long long effect;
+    bool rangeFunction(unsigned long long);
+    void effectFunction(unsigned long long &);
 };
 
 enum calcType{
   CALC_FULL,
   CALC_MIDSTEP
-};
-
-/// A PetriNet Edge - holds a single edge's state information.
-class PetriEdge{
-  public:
-    unsigned int id;
-    unsigned int source;
-    unsigned int target;
-    edgeType etype;
-    unsigned int multiplicity;
-    std::string expression;
-};
-
-/// A PetriNet Color - holds information about possible colors in a net.
-class PetriColor{
-  public:
-    std::string name;
-    std::string type;
-    std::string value;
 };
 
 ///A PetriNet calculator.
@@ -90,31 +27,26 @@ class PetriColor{
 class PetriNet{
   public:
     PetriNet(std::string XML);/// Parse a std::string representation of the net XML
-    bool CalculateStep();///< Does a single maximally-enabled calculation step
-    void PrintStateHeader();///< Prints the header for states, seperated by tabs, followed by a newline.
-    void PrintState();///< Prints the current net state, seperated by tabs, followed by a newline.
-    void PrintStateHeader(std::map<std::string, unsigned int> & cellnames);
-    void PrintState(std::map<std::string, unsigned int> & cellnames);
-    unsigned long long int isEnabled(unsigned int T, calcType C = CALC_FULL);///< Returns how many times this transition is enabled.
-    std::map<unsigned int, PetriPlace> places;
-    std::map<unsigned int, PetriTrans> transitions;
-    std::map<unsigned int, PetriEdge> edges;
-    std::map<std::string, PetriColor> colors;
-    std::map<std::string, std::string> variables;
+    bool calculateStep();///< Does a single maximally-enabled calculation step
+    void printStateHeader();///< Prints the header for states, seperated by tabs, followed by a newline.
+    void printState();///< Prints the current net state, seperated by tabs, followed by a newline.
+    void printStateHeader(std::map<std::string, unsigned int> & cellnames);
+    void printState(std::map<std::string, unsigned int> & cellnames);
+    bool isEnabled(unsigned int T);///< Returns if this transition is enabled
+    std::map<unsigned long long, std::string> places;///< Human readable names for places
+    std::map<unsigned long long, unsigned long long> marking;///< Markings for places
+    std::map<unsigned long long, std::string> transitions;///< Human readable names for transitions
+    std::map<unsigned long long, std::map<unsigned long long, PetriArc> > arcs;///<All arcs, in the format: arcs[transition][place]
     unsigned int findPlace(std::string placename);
-    bool conflicts(unsigned int transition, std::set<unsigned int> & checked_transitions);
+    void fire(unsigned int T);
 private:
-    void LoadCache();
+    void loadCache();
     void parseNodes(TiXmlNode * N);
     void parseEdges(TiXmlNode * N);
     void parseMeta(TiXmlNode * N);
     void addPlace(TiXmlNode * N);
     void addTransition(TiXmlNode * N);
-    void addEdge(TiXmlNode * N, edgeType E);
-    void addColset(TiXmlNode * N);
-    void addVariable(TiXmlNode * N);
-    bool findInput(unsigned int src, std::string expression, std::map<std::string, std::string> & vars);
-    void doInput(unsigned int T, unsigned long long int cnt);
-    void doOutput(unsigned int T, unsigned long long int cnt);
+    void addEdge(TiXmlNode * N, unsigned int E);
     TiXmlDocument myXML;
 };//PetriNet
+

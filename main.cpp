@@ -27,16 +27,16 @@ int main(int argc, char ** argv){
 
   unsigned int steps = 0;
   if (cellnames.size() == 0){
-    Net.PrintStateHeader();
-    Net.PrintState();
+    Net.printStateHeader();
+    Net.printState();
   }else{
-    Net.PrintStateHeader(cellnames);
-    Net.PrintState(cellnames);
+    Net.printStateHeader(cellnames);
+    Net.printState(cellnames);
   }
-  while (Net.CalculateStep()){
+  while (Net.calculateStep()){
     steps++;
     if (steps % printcount == 0){
-      if (cellnames.size() == 0){Net.PrintState();}else{Net.PrintState(cellnames);}
+      if (cellnames.size() == 0){Net.printState();}else{Net.printState(cellnames);}
     }
     if (time(0) >= nextTime){
       nextTime = time(0)+1;
@@ -45,5 +45,5 @@ int main(int argc, char ** argv){
     }
   }
   
-  
 }
+

@@ -2,7 +2,7 @@ SRC = main.cpp petricalc.cpp tinyxml.cpp tinyxmlerror.cpp tinyxmlparser.cpp
 OBJ = $(SRC:.cpp=.o)
 OUT = PetriCalc
 INCLUDES = 
-DEBUG = 4
+DEBUG = 10
 OPTIMIZE = -g
 VERSION = `git describe --tags`
 CCFLAGS = -Wall -Wextra -funsigned-char $(OPTIMIZE) -DDEBUG=$(DEBUG) -DVERSION=$(VERSION) -DTIXML_USE_STL
