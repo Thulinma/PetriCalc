@@ -29,17 +29,12 @@ int main(int argc, char ** argv){
   }
 
   unsigned int steps = 0;
-  if (cellnames.size() == 0){
-    Net.printStateHeader();
-    Net.printState();
-  }else{
-    Net.printStateHeader(cellnames);
-    Net.printState(cellnames);
-  }
+  Net.printStateHeader(cellnames);
+  Net.printState(cellnames);
   while (Net.calculateStep()){
     steps++;
     if (steps % printcount == 0){
-      if (cellnames.size() == 0){Net.printState();}else{Net.printState(cellnames);}
+      Net.printState(cellnames);
     }
     if (time(0) >= nextTime){
       nextTime = time(0)+1;

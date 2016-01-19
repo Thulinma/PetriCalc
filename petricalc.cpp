@@ -2,9 +2,10 @@
 #include <deque>
 #include <algorithm>
 
+/// Base constructor will create a No-Operation arc ((0, inf), 0).
 PetriArc::PetriArc(){
   rangeLow = 0;
-  rangeHigh = 0xFFFFFFFFFFFFFFFFull;
+  rangeHigh = INFTY;
   effect = 0;
 }
 
@@ -14,13 +15,13 @@ PetriArc::PetriArc(unsigned long long rLow, unsigned long long rHigh, long long 
   effect = e;
 }
 
-// From definition 11: fr ((l, h), m) = true if l ≤ m ≤ h, false otherwise
 bool PetriArc::rangeFunction(unsigned long long m){
+  // From definition 11: fr ((l, h), m) = true if l ≤ m ≤ h, false otherwise
   return (rangeLow <= m && m <= rangeHigh);
 }
 
-// From definition 11: fe (e, m) = e + m
 void PetriArc::effectFunction(unsigned long long & m){
+  // From definition 11: fe (e, m) = e + m
   m += effect;
 }
 
@@ -38,8 +39,11 @@ void PetriArc::combine(PetriArc param){
   fprintf(stderr, "((%llu, %llu), %lld)\n", rangeLow, rangeHigh, effect);
 }
 
+/// Constructor that parses a std::string containing Snoopy XML into a PetriNet.
+/// It does this by checking if nodeclasses and edgeclasses entries are present, and if so, feeds those to parseNodes respectively parseEdges.
+/// All other contents of the net are ignored.
 PetriNet::PetriNet(std::string XML){
-  myXML = TiXmlDocument(XML);
+  TiXmlDocument myXML = TiXmlDocument(XML);
   if (!myXML.LoadFile()){
     fprintf(stderr, "Error: Could not read file %s\n", XML.c_str());
     exit(42);
@@ -59,6 +63,7 @@ PetriNet::PetriNet(std::string XML){
   parseEdges(c);
 };
 
+/// Parses all node types from a Snoopy XML file and calls addPlace or addTransition on all places respectively transitions found in the file.
 void PetriNet::parseNodes(TiXmlNode * N){
   TiXmlNode * c = 0, * d = 0;
   TiXmlElement * e;
@@ -81,6 +86,10 @@ void PetriNet::parseNodes(TiXmlNode * N){
   }
 }
 
+/// Adds a single place to the net from a Snoopy XML file.
+/// Since in our model places are nothing more than labels, this means creating a new entry in the place ID to place name map.
+/// Additionally, an entry in the place ID to marking map is made.
+/// If the new place has no name, it's given the name "place_" followed by the ID, instead. Thus all places are guaranteed to have a name.
 void PetriNet::addPlace(TiXmlNode * N){
   TiXmlElement * e;
   e = N->ToElement();
@@ -110,6 +119,9 @@ void PetriNet::addPlace(TiXmlNode * N){
   #endif
 }
 
+/// Adds a single transition to the net from a Snoopy XML file.
+/// Since in our model transitions are nothing more than labels, this means creating a new entry in the transition ID to transition name map.
+/// If the new transition has no name, it's given the name "trans_" followed by the ID, instead. Thus all transitions are guaranteed to have a name.
 void PetriNet::addTransition(TiXmlNode * N){
   TiXmlElement * e;
   e = N->ToElement();
@@ -144,6 +156,7 @@ enum edgeType{
   EDGE_EQUAL
 };
 
+/// Parses all edge types from a Snoopy XML file and calls addEdge for each edge found in the file.
 void PetriNet::parseEdges(TiXmlNode * N){
   TiXmlNode * c = 0, * d = 0;
   TiXmlElement * e;
@@ -176,6 +189,9 @@ void PetriNet::parseEdges(TiXmlNode * N){
   }
 }
 
+/// Adds a single arc to the net, from a Snoopy XML file.
+/// This function combines arc labels using the combination operator if an arc between the same place and transition already exists.
+/// The result of this is that arc labels never need be combined later, as they have been combined right here during net load already.
 void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
   TiXmlElement * e;
   e = N->ToElement();
@@ -219,7 +235,7 @@ void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
     }else{
       aRLow = 0;
     }
-    aRHigh = 0xFFFFFFFFFFFFFFFFull;
+    aRHigh = INFTY;
     aEffect = multiplicity;
   }
   if (E == EDGE_ACTIVATOR){
@@ -228,7 +244,7 @@ void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
     }else{
       aRLow = multiplicity;
     }
-    aRHigh = 0xFFFFFFFFFFFFFFFFull;
+    aRHigh = INFTY;
     aEffect = 0;
   }
   if (E == EDGE_INHIBITOR){
@@ -256,8 +272,9 @@ void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
     }else{
       aRLow = 0;
     }
-    aRHigh = 0xFFFFFFFFFFFFFFFFull;
-    aEffect = -0xFFFFFFFFFFFFFFll;
+    aRHigh = INFTY;
+    aEffect = NEGTY;
+    fprintf(stderr, "Warning: Reset edge detected! Net will not function as intended!\n");
   }
 
   if (arcs.count(transition) && arcs[transition].count(place)){
@@ -273,6 +290,8 @@ void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
   }
 }
 
+/// Does a single calculation step, following the method given in definition 8.
+/// Returns true if a step was completed, false if no more transitions are enabled.
 bool PetriNet::calculateStep(){
   // Definition 8: To calculate a single transition step for a given marked Petri net N = ((P, T, A), (D, fr , fe, L, ⊗, I), M ), do the following:
   // - Create a list E of all enabled transitions, using the method described in Definition 5 to determine enabledness for all t ∈ T .
@@ -317,6 +336,8 @@ bool PetriNet::calculateStep(){
   return true;
 }
 
+/// Returns true if the given transition ID is enabled, false otherwise.
+/// Follows definition 5 for deciding if the transition is enabled or not.
 bool PetriNet::isEnabled(unsigned int T){
 // Definition 5: In a marked Petri net N = ((P, T, A), (D, fr , fe , L, ⊗, I), M ) a transition t ∈ T is enabled when for all p ∈ P such that p‡t, fR(aR , M (p)) = true, where a is the pt-combined arc label.
 
@@ -337,22 +358,8 @@ bool PetriNet::isEnabled(unsigned int T){
   return true;
 }
 
-void PetriNet::printState(){
-  std::map<unsigned long long, unsigned long long>::iterator i;
-  for (i = marking.begin(); i != marking.end(); i++){
-    printf("%lli\t", i->second);
-  }
-  printf("\n");
-}
-
-void PetriNet::printStateHeader(){
-  std::map<unsigned long long, unsigned long long>::iterator i;
-  for (i = marking.begin(); i != marking.end(); i++){
-    printf("%s\t", places[i->first].c_str());
-  }
-  printf("\n");
-}
-
+/// Returns the ID for a given string placename.
+/// Returns 0 if not found.
 unsigned int PetriNet::findPlace(std::string placename){
   std::map<unsigned long long, std::string>::iterator pIter;
   for (pIter = places.begin(); pIter != places.end(); pIter++){
@@ -361,18 +368,38 @@ unsigned int PetriNet::findPlace(std::string placename){
   return 0;
 }
 
+/// Prints the current net marking, separated by tabs, followed by a newline.
+/// The cellnames argument contains a map from place names to place IDs.
+/// If cellnames is empty, prints markings for all places.
 void PetriNet::printState(std::map<std::string, unsigned int> & cellnames){
-  std::map<std::string, unsigned int>::iterator nIter;
-  for (nIter = cellnames.begin(); nIter != cellnames.end(); nIter++){
-    printf("%llu\t", marking[nIter->second]);
+  if (cellnames.size()){
+    std::map<std::string, unsigned int>::iterator nIter;
+    for (nIter = cellnames.begin(); nIter != cellnames.end(); nIter++){
+      printf("%llu\t", marking[nIter->second]);
+    }
+  }else{
+    std::map<unsigned long long, unsigned long long>::iterator i;
+    for (i = marking.begin(); i != marking.end(); i++){
+      printf("%lli\t", i->second);
+    }
   }
   printf("\n");
 }
 
+/// Prints the header for states, separated by tabs, followed by a newline.
+/// The cellnames argument contains a map from place names to place IDs.
+/// If cellnames is empty, prints headers for all places.
 void PetriNet::printStateHeader(std::map<std::string, unsigned int> & cellnames){
-  std::map<std::string, unsigned int>::iterator nIter;
-  for (nIter = cellnames.begin(); nIter != cellnames.end(); nIter++){
-    printf("%s\t", nIter->first.c_str());
+  if (cellnames.size()){
+    std::map<std::string, unsigned int>::iterator nIter;
+    for (nIter = cellnames.begin(); nIter != cellnames.end(); nIter++){
+      printf("%s\t", nIter->first.c_str());
+    }
+  }else{
+    std::map<unsigned long long, unsigned long long>::iterator i;
+    for (i = marking.begin(); i != marking.end(); i++){
+      printf("%s\t", places[i->first].c_str());
+    }
   }
   printf("\n");
 }
