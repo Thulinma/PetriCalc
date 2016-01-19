@@ -9,25 +9,32 @@ PetriArc::PetriArc(){
   effect = 0;
 }
 
+/// Fancy constructor will create a given arc labeled as ((rLow, rHigh), e).
 PetriArc::PetriArc(unsigned long long rLow, unsigned long long rHigh, long long e){
   rangeLow = rLow;
   rangeHigh = rHigh;
   effect = e;
 }
 
+/// The range function from definition 11.
+/// When called, true or false is returned to indicate if this arc can enable connected transitions (true) or not (false).
 bool PetriArc::rangeFunction(unsigned long long m){
   // From definition 11: fr ((l, h), m) = true if l ≤ m ≤ h, false otherwise
   return (rangeLow <= m && m <= rangeHigh);
 }
 
+/// The effect function from definition 11.
+/// When called, the effect is applied to the given unsigned long long value by reference.
 void PetriArc::effectFunction(unsigned long long & m){
   // From definition 11: fe (e, m) = e + m
   m += effect;
 }
 
-// From definition 11: ⊗(((l1 , h1 ), e1 ), ((l2 , h2 ), e2 )) = (l1 + l2 , min(h1 , h2)), e1 + e2 )
+/// The combination operator from definition 11.
+/// When called, this PetriArc and given PetriArc are combined into this PetriArc (irreversibly).
 void PetriArc::combine(PetriArc param){
-  #if DEBUG >= 5
+  // From definition 11: ⊗(((l1 , h1 ), e1 ), ((l2 , h2 ), e2 )) = (l1 + l2 , min(h1 , h2)), e1 + e2 )
+  #if DEBUG >= 9
   fprintf(stderr, "Combining: ((%llu, %llu), %lld) COMB ((%llu, %llu), %lld) = ", rangeLow, rangeHigh, effect, param.rangeLow, param.rangeHigh, param.effect);
   #endif 
   //Set l to the sum of l1 and l2
@@ -278,7 +285,7 @@ void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
   }
 
   if (arcs.count(transition) && arcs[transition].count(place)){
-    #if DEBUG >= 5
+    #if DEBUG >= 9
     fprintf(stderr, "Combining arc between transition %s and place %s:\n", transitions[transition].c_str(), places[place].c_str());
     #endif
     arcs[transition][place].combine(PetriArc(aRLow, aRHigh, aEffect));
