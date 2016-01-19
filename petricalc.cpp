@@ -43,7 +43,9 @@ void PetriArc::combine(PetriArc param){
   if (param.rangeHigh < rangeHigh){rangeHigh = param.rangeHigh;}
   //Set e to the sum of e1 and e2
   effect += param.effect;
+  #if DEBUG >= 9
   fprintf(stderr, "((%llu, %llu), %lld)\n", rangeLow, rangeHigh, effect);
+  #endif 
 }
 
 /// Constructor that parses a std::string containing Snoopy XML into a PetriNet.
