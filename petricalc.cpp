@@ -1,40 +1,45 @@
-/// PetriCalc implementation.
-/// Author: Jaron Viëtor, 2012-2016
-/// This code is public domain - do with it what you want. A mention of the original author would be appreciated though.
+/// \file petricalc.cpp
+/// \brief PetriCalc implementation.
+/// \author Jaron Viëtor
+/// \date 2012-2016
+/// \copyright This code is public domain - do with it what you want. A mention of the original author would be appreciated though.
 
 #include "petricalc.h"
 #include <deque>
 #include <algorithm>
 
-/// Base constructor will create a No-Operation arc ((0, inf), 0).
+/// \brief Base constructor will create a No-Operation arc ((0, inf), 0).
 PetriArc::PetriArc(){
   rangeLow = 0;
   rangeHigh = INFTY;
   effect = 0;
 }
 
-/// Fancy constructor will create a given arc labeled as ((rLow, rHigh), e).
+/// \brief Fancy constructor will create a given arc labeled as ((rLow, rHigh), e).
 PetriArc::PetriArc(unsigned long long rLow, unsigned long long rHigh, long long e){
   rangeLow = rLow;
   rangeHigh = rHigh;
   effect = e;
 }
 
-/// The range function from definition 11.
+/// \brief The range function from definition 11.
+/// 
 /// When called, true or false is returned to indicate if this arc can enable connected transitions (true) or not (false).
 bool PetriArc::rangeFunction(unsigned long long m){
   // From definition 11: fr ((l, h), m) = true if l ≤ m ≤ h, false otherwise
   return (rangeLow <= m && m <= rangeHigh);
 }
 
-/// The effect function from definition 11.
+/// \brief The effect function from definition 11.
+/// 
 /// When called, the effect is applied to the given unsigned long long value by reference.
 void PetriArc::effectFunction(unsigned long long & m){
   // From definition 11: fe (e, m) = e + m
   m += effect;
 }
 
-/// The combination operator from definition 11.
+/// \brief The combination operator from definition 11.
+/// 
 /// When called, this PetriArc and given PetriArc are combined into this PetriArc (irreversibly).
 void PetriArc::combine(PetriArc param){
   // From definition 11: ⊗(((l1 , h1 ), e1 ), ((l2 , h2 ), e2 )) = (l1 + l2 , min(h1 , h2)), e1 + e2 )
@@ -52,7 +57,8 @@ void PetriArc::combine(PetriArc param){
   #endif 
 }
 
-/// Constructor that parses a std::string containing Snoopy XML into a PetriNet.
+/// \brief Constructor that parses a std::string containing Snoopy XML into a PetriNet.
+/// 
 /// It does this by checking if nodeclasses and edgeclasses entries are present, and if so, feeds those to parseNodes respectively parseEdges.
 /// All other contents of the net are ignored.
 PetriNet::PetriNet(std::string XML){
@@ -76,7 +82,7 @@ PetriNet::PetriNet(std::string XML){
   parseEdges(c);
 };
 
-/// Parses all node types from a Snoopy XML file and calls addPlace or addTransition on all places respectively transitions found in the file.
+/// \brief Parses all node types from a Snoopy XML file and calls addPlace or addTransition on all places respectively transitions found in the file.
 void PetriNet::parseNodes(TiXmlNode * N){
   TiXmlNode * c = 0, * d = 0;
   TiXmlElement * e;
@@ -99,7 +105,8 @@ void PetriNet::parseNodes(TiXmlNode * N){
   }
 }
 
-/// Adds a single place to the net from a Snoopy XML file.
+/// \brief Adds a single place to the net from a Snoopy XML file.
+/// 
 /// Since in our model places are nothing more than labels, this means creating a new entry in the place ID to place name map.
 /// Additionally, an entry in the place ID to marking map is made.
 /// If the new place has no name, it's given the name "place_" followed by the ID, instead. Thus all places are guaranteed to have a name.
@@ -132,7 +139,8 @@ void PetriNet::addPlace(TiXmlNode * N){
   #endif
 }
 
-/// Adds a single transition to the net from a Snoopy XML file.
+/// \brief Adds a single transition to the net from a Snoopy XML file.
+/// 
 /// Since in our model transitions are nothing more than labels, this means creating a new entry in the transition ID to transition name map.
 /// If the new transition has no name, it's given the name "trans_" followed by the ID, instead. Thus all transitions are guaranteed to have a name.
 void PetriNet::addTransition(TiXmlNode * N){
@@ -161,6 +169,7 @@ void PetriNet::addTransition(TiXmlNode * N){
   #endif
 }
 
+/// Edge types. Only used internally, and only inside parseEdges and addEdge.
 enum edgeType{
   EDGE_NORMAL,
   EDGE_ACTIVATOR,
@@ -169,7 +178,7 @@ enum edgeType{
   EDGE_EQUAL
 };
 
-/// Parses all edge types from a Snoopy XML file and calls addEdge for each edge found in the file.
+/// \brief Parses all edge types from a Snoopy XML file and calls addEdge for each edge found in the file.
 void PetriNet::parseEdges(TiXmlNode * N){
   TiXmlNode * c = 0, * d = 0;
   TiXmlElement * e;
@@ -202,7 +211,8 @@ void PetriNet::parseEdges(TiXmlNode * N){
   }
 }
 
-/// Adds a single arc to the net, from a Snoopy XML file.
+/// \brief Adds a single arc to the net, from a Snoopy XML file.
+/// 
 /// This function combines arc labels using the combination operator if an arc between the same place and transition already exists.
 /// The result of this is that arc labels never need be combined later, as they have been combined right here during net load already.
 void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
@@ -303,7 +313,8 @@ void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
   }
 }
 
-/// Does a single calculation step, following the method given in definition 8.
+/// \brief Does a single calculation step, following the method given in definition 8.
+/// 
 /// Returns true if a step was completed, false if no more transitions are enabled.
 bool PetriNet::calculateStep(){
   // Definition 8: To calculate a single transition step for a given marked Petri net N = ((P, T, A), (D, fr , fe, L, ⊗, I), M ), do the following:
@@ -349,7 +360,8 @@ bool PetriNet::calculateStep(){
   return true;
 }
 
-/// Returns true if the given transition ID is enabled, false otherwise.
+/// \brief Returns true if the given transition ID is enabled, false otherwise.
+/// 
 /// Follows definition 5 for deciding if the transition is enabled or not.
 bool PetriNet::isEnabled(unsigned int T){
 // Definition 5: In a marked Petri net N = ((P, T, A), (D, fr , fe , L, ⊗, I), M ) a transition t ∈ T is enabled when for all p ∈ P such that p‡t, fR(aR , M (p)) = true, where a is the pt-combined arc label.
@@ -371,7 +383,8 @@ bool PetriNet::isEnabled(unsigned int T){
   return true;
 }
 
-/// Returns the ID for a given string placename.
+/// \brief Returns the ID for a given string placename.
+/// 
 /// Returns 0 if not found.
 unsigned int PetriNet::findPlace(std::string placename){
   std::map<unsigned long long, std::string>::iterator pIter;
@@ -381,7 +394,8 @@ unsigned int PetriNet::findPlace(std::string placename){
   return 0;
 }
 
-/// Prints the current net marking, separated by tabs, followed by a newline.
+/// \brief Prints the current net marking, separated by tabs, followed by a newline.
+/// 
 /// The cellnames argument contains a map from place names to place IDs.
 /// If cellnames is empty, prints markings for all places.
 void PetriNet::printState(std::map<std::string, unsigned int> & cellnames){
@@ -399,7 +413,8 @@ void PetriNet::printState(std::map<std::string, unsigned int> & cellnames){
   printf("\n");
 }
 
-/// Prints the header for states, separated by tabs, followed by a newline.
+/// \brief Prints the header for states, separated by tabs, followed by a newline.
+/// 
 /// The cellnames argument contains a map from place names to place IDs.
 /// If cellnames is empty, prints headers for all places.
 void PetriNet::printStateHeader(std::map<std::string, unsigned int> & cellnames){

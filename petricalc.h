@@ -1,6 +1,8 @@
-/// PetriCalc header file.
-/// Author: Jaron Viëtor, 2012-2016
-/// This code is public domain - do with it what you want. A mention of the original author would be appreciated though.
+/// \file petricalc.h
+/// \brief PetriCalc header file.
+/// \author Jaron Viëtor
+/// \date 2012-2016
+/// \copyright This code is public domain - do with it what you want. A mention of the original author would be appreciated though.
 
 #pragma once
 #include <vector>
@@ -16,31 +18,26 @@
 //  4 = Chosen transition during stepping
 
 
-// Infinity and negative infinity are represented by chosen constants.
+/// Since infinity is not representable as a number, the constant 0xFFFFFFFFFFFFFFFFull is used to represent infinity.
 #define INFTY 0xFFFFFFFFFFFFFFFFull
+/// Since negative infinity is not representable as a number, the constant -0xFFFFFFFFFFFFFFll is used to represent negative infinity.
 #define NEGTY -0xFFFFFFFFFFFFFFll
 
-/// A PetriNet arc - contains the arc label for a PetriNet arc.
+/// \brief A PetriNet arc - contains the arc label for a PetriNet arc.
 /// The range function, effect function and combine function are direct conversions from the range function, effect function and combination operator from Definition 11.
-/// Since infinity is not representable as a number, the constant 0xFFFFFFFFFFFFFFFFull is used to represent infinity.
 class PetriArc{
   public:
     PetriArc();
     PetriArc(unsigned long long rLow, unsigned long long rHigh, long long e);
-    unsigned long long rangeLow;
-    unsigned long long rangeHigh;
-    long long effect;
+    unsigned long long rangeLow; ///< The low range portion of the arc label.
+    unsigned long long rangeHigh; ///< The high range portion of the arc label.
+    long long effect; ///< The effect portion of the arc label.
     bool rangeFunction(unsigned long long);
     void effectFunction(unsigned long long &);
     void combine(PetriArc param);
 };
 
-enum calcType{
-  CALC_FULL,
-  CALC_MIDSTEP
-};
-
-///A PetriNet calculator.
+/// \brief A PetriNet calculator.
 class PetriNet{
   public:
     PetriNet(std::string XML);
