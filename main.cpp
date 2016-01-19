@@ -3,6 +3,9 @@
 #include <time.h>
 
 int main(int argc, char ** argv){
+
+  srand(time(0));
+
   int printcount = 1;
   time_t lastSteps = 0, nextTime = time(0) + 1;
   std::map<std::string, unsigned int> cellnames;

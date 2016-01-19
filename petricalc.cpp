@@ -2,6 +2,11 @@
 #include <deque>
 #include <algorithm>
 
+PetriArc::PetriArc(){
+  rangeLow = 0;
+  rangeHigh = 0xFFFFFFFFFFFFFFFFull;
+  effect = 0;
+}
 
 PetriArc::PetriArc(unsigned long long rLow, unsigned long long rHigh, long long e){
   rangeLow = rLow;
@@ -9,12 +14,28 @@ PetriArc::PetriArc(unsigned long long rLow, unsigned long long rHigh, long long 
   effect = e;
 }
 
+// From definition 11: fr ((l, h), m) = true if l ≤ m ≤ h, false otherwise
 bool PetriArc::rangeFunction(unsigned long long m){
-  return (m >= rangeLow && m <= rangeHigh);
+  return (rangeLow <= m && m <= rangeHigh);
 }
 
+// From definition 11: fe (e, m) = e + m
 void PetriArc::effectFunction(unsigned long long & m){
   m += effect;
+}
+
+// From definition 11: ⊗(((l1 , h1 ), e1 ), ((l2 , h2 ), e2 )) = (l1 + l2 , min(h1 , h2)), e1 + e2 )
+void PetriArc::combine(PetriArc param){
+  #if DEBUG >= 5
+  fprintf(stderr, "Combining: ((%llu, %llu), %lld) COMB ((%llu, %llu), %lld) = ", rangeLow, rangeHigh, effect, param.rangeLow, param.rangeHigh, param.effect);
+  #endif 
+  //Set l to the sum of l1 and l2
+  rangeLow += param.rangeLow;
+  //Set h to the maximum of h1 and h2
+  if (param.rangeHigh < rangeHigh){rangeHigh = param.rangeHigh;}
+  //Set e to the sum of e1 and e2
+  effect += param.effect;
+  fprintf(stderr, "((%llu, %llu), %lld)\n", rangeLow, rangeHigh, effect);
 }
 
 PetriNet::PetriNet(std::string XML){
@@ -221,36 +242,41 @@ void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
   }
   if (E == EDGE_EQUAL){
     if (multiplicity < 0){
-      arcs[transition][place].rangeLow = -multiplicity;
-      arcs[transition][place].rangeHigh = -multiplicity;
+      aRLow = -multiplicity;
+      aRHigh = -multiplicity;
     }else{
-      arcs[transition][place].rangeLow = multiplicity;
-      arcs[transition][place].rangeHigh = multiplicity;
+      aRLow = multiplicity;
+      aRHigh = multiplicity;
     }
-    arcs[transition][place].effect = 0;
+    aEffect = 0;
   }
   if (E == EDGE_RESET){
     if (multiplicity < 0){
-      arcs[transition][place].rangeLow = -multiplicity;
+      aRLow = -multiplicity;
     }else{
-      arcs[transition][place].rangeLow = 0;
+      aRLow = 0;
     }
-    arcs[transition][place].rangeHigh = 0xFFFFFFFFFFFFFFFFull;
-    arcs[transition][place].effect = -0xFFFFFFFFFFFFFFll;
+    aRHigh = 0xFFFFFFFFFFFFFFFFull;
+    aEffect = -0xFFFFFFFFFFFFFFll;
   }
 
-  #if DEBUG >= 10
-  fprintf(stderr, "Added arc between transition %llu and place %llu: ((%llu, %llu), %lli)\n", transition, place, arcs[transition][place].rangeLow, arcs[transition][place].rangeHigh, arcs[transition][place].effect);
-  #endif
-  arcs[transition][place] = PetriArc(aRLow, aRHigh, aEffect);
-  arcs[transition][place].rangeHigh = aRHigh;
-  arcs[transition][place].effect = aEffect;
+  if (arcs.count(transition) && arcs[transition].count(place)){
+    #if DEBUG >= 5
+    fprintf(stderr, "Combining arc between transition %s and place %s:\n", transitions[transition].c_str(), places[place].c_str());
+    #endif
+    arcs[transition][place].combine(PetriArc(aRLow, aRHigh, aEffect));
+  }else{
+    #if DEBUG >= 10
+    fprintf(stderr, "Added arc between transition %s and place %s: ((%llu, %llu), %lli)\n", transitions[transition].c_str(), places[place].c_str(), aRLow, aRHigh, aEffect);
+    #endif
+    arcs[transition][place] = PetriArc(aRLow, aRHigh, aEffect);
+  }
 }
 
 bool PetriNet::calculateStep(){
-// Definition 8: To calculate a single transition step for a given marked Petri net N = ((P, T, A), (D, fr , fe, L, ⊗, I), M ), do the following:
-// - Create a list E of all enabled transitions, using the method described in Definition 5 to determine enabledness for all t ∈ T .
-// - Pick any one transition t ∈ E and fire it using the method described in Definition 6.
+  // Definition 8: To calculate a single transition step for a given marked Petri net N = ((P, T, A), (D, fr , fe, L, ⊗, I), M ), do the following:
+  // - Create a list E of all enabled transitions, using the method described in Definition 5 to determine enabledness for all t ∈ T .
+  // - Pick any one transition t ∈ E and fire it using the method described in Definition 6.
 
   std::map<unsigned long long, std::map<unsigned long long, PetriArc> >::iterator T;
   std::map<unsigned long long, PetriArc>::iterator A;
@@ -271,11 +297,17 @@ bool PetriNet::calculateStep(){
   std::advance(selector, rand() % enabled.size());
 
 
-  #if DEBUG >= 5
-  fprintf(stderr, "Stepping: picked transition %llu\n", *selector);
+  #if DEBUG >= 4
+  fprintf(stderr, "Stepping: picked transition %s\n", transitions[*selector].c_str());
   #endif
 
-  //Run the effect function on each arc of the chosen transition
+  // Definition 6 In a marked Petri net N = ((P, T, A), (D, fr , fe , L, ⊗, I), M ) the firing of a transition t ∈ T is changing M into M 0 so that:
+  // - ∀p ∈ P such that p ‡ t, M 0(p) = fE (aE , M (p))
+  // - ∀p ∈ P such that p † t, M 0(p) = M (p)
+  // Where a is the pt-combined arc label.
+
+  //Run the effect function on each arc of the chosen transition.
+  //We do not calculate the pt-combined arc label here, since it's been pre-calculated during net load already for each transition
   std::map<unsigned long long, PetriArc> & selected = arcs[*selector];
   for (A = selected.begin(); A != selected.end(); A++){
     A->second.effectFunction(marking[A->first]);
@@ -303,17 +335,6 @@ bool PetriNet::isEnabled(unsigned int T){
 
   //only if all fR(aR , M (p)) are true, return true
   return true;
-}
-
-void PetriNet::fire(unsigned int T){
-// Definition 6 In a marked Petri net N = ((P, T, A), (D, fr , fe , L, ⊗, I), M ) the firing of a transition t ∈ T is changing M into M 0 so that:
-// - ∀p ∈ P such that p ‡ t, M 0(p) = fE (aE , M (p))
-// - ∀p ∈ P such that p † t, M 0(p) = M (p)
-// Where a is the pt-combined arc label.
-
-  #if DEBUG >= 5
-  fprintf(stderr, "Doing input step for transition %s...\n", transitions[T].c_str());
-  #endif
 }
 
 void PetriNet::printState(){

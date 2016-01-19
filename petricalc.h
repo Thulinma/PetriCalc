@@ -5,15 +5,18 @@
 #include <string>
 #include "tinyxml.h"
 
-/// A PetriNet arc - contains the connected place, range and effect.
+/// A PetriNet arc - contains the arc label for a PetriNet arc.
+/// The range function, effect function and combine function are direct conversions from the range function, effect function and combination operator from Definition 11.
 class PetriArc{
   public:
+    PetriArc();
     PetriArc(unsigned long long rLow, unsigned long long rHigh, long long e);
     unsigned long long rangeLow;
     unsigned long long rangeHigh;
     long long effect;
     bool rangeFunction(unsigned long long);
     void effectFunction(unsigned long long &);
+    void combine(PetriArc param);
 };
 
 enum calcType{
