@@ -1,3 +1,7 @@
+/// PetriCalc header file.
+/// Author: Jaron Viëtor, 2012-2016
+/// This code is public domain - do with it what you want. A mention of the original author would be appreciated though.
+
 #pragma once
 #include <vector>
 #include <map>

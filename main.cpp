@@ -1,10 +1,21 @@
+/// PetriCalc main function.
+/// Author: Jaron Viëtor, 2012-2016
+/// This code is public domain - do with it what you want. A mention of the original author would be appreciated though.
+
+//main PetriNet library
 #include "petricalc.h"
+//for std::cerr
 #include <iostream>
+//for time()
 #include <time.h>
+//for getpid()
+#include <sys/types.h>
+#include <unistd.h>
 
 int main(int argc, char ** argv){
-
-  srand(time(0));
+  //Initialize the random number generator with the current PID.
+  //Comment out if randomness (each run being different) isn't wanted.
+  srand(getpid());
 
   int printcount = 1;
   time_t lastSteps = 0, nextTime = time(0) + 1;
@@ -19,7 +30,6 @@ int main(int argc, char ** argv){
 
   std::cerr << "Loading " << argv[1] << "..." << std::endl;
   PetriNet Net(argv[1]);
-  std::cerr << "Loaded " << argv[1] << "!" << std::endl;
 
   if (argc > 3){
     for (int i = 3; i < argc; ++i){
