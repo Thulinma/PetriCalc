@@ -28,10 +28,13 @@
 class PetriArc{
   public:
     PetriArc();
-    PetriArc(unsigned long long rLow, unsigned long long rHigh, long long e);
+    PetriArc(unsigned long long rUsed, unsigned long long rLow, unsigned long long rHigh, long long e, bool eSetter);
+    unsigned long long rangeUsed; ///< The used range portion of the arc label.
     unsigned long long rangeLow; ///< The low range portion of the arc label.
     unsigned long long rangeHigh; ///< The high range portion of the arc label.
     long long effect; ///< The effect portion of the arc label.
+    bool effectSetter; ///> Is the effect a setter?
+    long long effectAdded;///> Internal use only: total amount of tokens ever added.
     bool rangeFunction(unsigned long long);
     void effectFunction(unsigned long long &);
     void combine(PetriArc param);

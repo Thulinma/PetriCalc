@@ -8,52 +8,72 @@
 #include <deque>
 #include <algorithm>
 
-/// \brief Base constructor will create a No-Operation arc ((0, inf), 0).
+/// \brief Base constructor will create a No-Operation arc ((0, 0, inf), 0).
 PetriArc::PetriArc(){
+  rangeUsed = 0;
   rangeLow = 0;
   rangeHigh = INFTY;
   effect = 0;
 }
 
 /// \brief Fancy constructor will create a given arc labeled as ((rLow, rHigh), e).
-PetriArc::PetriArc(unsigned long long rLow, unsigned long long rHigh, long long e){
+PetriArc::PetriArc(unsigned long long rUsed, unsigned long long rLow, unsigned long long rHigh, long long e, bool eSetter){
+  rangeUsed = rUsed;
   rangeLow = rLow;
   rangeHigh = rHigh;
   effect = e;
+  effectAdded = 0;
+  if (effect > 0){effectAdded = effect;}
+  effectSetter = eSetter;
 }
 
-/// \brief The range function from definition 11.
+/// \brief The range function from definition 8.
 /// 
 /// When called, true or false is returned to indicate if this arc can enable connected transitions (true) or not (false).
 bool PetriArc::rangeFunction(unsigned long long m){
-  // From definition 11: fr ((l, h), m) = true if l ≤ m ≤ h, false otherwise
-  return (rangeLow <= m && m <= rangeHigh);
+  // From definition 8: fr ((l, h), m) = true if l ≤ m ≤ h and u ≤ v, false otherwise
+#if DEBUG >= 10
+  fprintf(stderr, "Range function: %llu <= %llu <= %llu && %llu <= %llu = %s", rangeLow, m, rangeHigh, rangeUsed, m, (rangeLow <= m && m <= rangeHigh && m <= rangeUsed)?"true":"false");
+#endif
+  return (rangeLow <= m && m <= rangeHigh && rangeUsed <= m);
 }
 
 /// \brief The effect function from definition 11.
 /// 
 /// When called, the effect is applied to the given unsigned long long value by reference.
 void PetriArc::effectFunction(unsigned long long & m){
-  // From definition 11: fe (e, m) = e + m
-  m += effect;
+  // From definition 8: fe (e, m) = e + m
+  if (effectSetter){
+    m = effect;
+  }else{
+    m += effect;
+  }
 }
 
-/// \brief The combination operator from definition 11.
+/// \brief The combination operator from definition 8.
 /// 
 /// When called, this PetriArc and given PetriArc are combined into this PetriArc (irreversibly).
 void PetriArc::combine(PetriArc param){
-  // From definition 11: ⊗(((l1 , h1 ), e1 ), ((l2 , h2 ), e2 )) = (l1 + l2 , min(h1 , h2)), e1 + e2 )
+  // From definition 8: ⊗(((u1, l1 , h1 ), e1 ), ((u2, l2 , h2 ), e2 )) = (u1 + u2, max(l1, l2), min(h1 , h2)), e1 + e2 )
   #if DEBUG >= 9
-  fprintf(stderr, "Combining: ((%llu, %llu), %lld) COMB ((%llu, %llu), %lld) = ", rangeLow, rangeHigh, effect, param.rangeLow, param.rangeHigh, param.effect);
+  fprintf(stderr, "Combining: ((%llu, %llu, %llu), %s%lld) COMB ((%llu, %llu, %llu), %s%lld) = ", rangeUsed, rangeLow, rangeHigh, effectSetter?"S":"", effect, param.rangeUsed, param.rangeLow, param.rangeHigh, param.effectSetter?"S":"", param.effect);
   #endif 
-  //Set l to the sum of l1 and l2
-  rangeLow += param.rangeLow;
-  //Set h to the maximum of h1 and h2
+  //Set u to the sum of u1 and u2
+  rangeUsed += param.rangeUsed;
+  //Set l to the maximum of l1 and l2
+  if (param.rangeLow > rangeLow){rangeLow = param.rangeLow;}
+  //Set h to the minimum of h1 and h2
   if (param.rangeHigh < rangeHigh){rangeHigh = param.rangeHigh;}
   //Set e to the sum of e1 and e2
-  effect += param.effect;
+  effectAdded += param.effectAdded;
+  if (!effectSetter && !param.effectSetter){
+    effect += param.effect;
+  }else{
+    effectSetter = true;
+    effect = effectAdded;
+  }
   #if DEBUG >= 9
-  fprintf(stderr, "((%llu, %llu), %lld)\n", rangeLow, rangeHigh, effect);
+  fprintf(stderr, "((%llu, %llu, %llu), %s%lld)\n", rangeUsed, rangeLow, rangeHigh, effectSetter?"S":"", effect);
   #endif 
 }
 
@@ -249,8 +269,9 @@ void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
     multiplicity *= -1;
   }
   
-  unsigned long long aRLow, aRHigh;
+  unsigned long long aRLow, aRHigh, aRUsed;
   long long aEffect;
+  bool aEffectSetter = false;
 
   if (E == EDGE_NORMAL){
     if (multiplicity < 0){
@@ -258,6 +279,7 @@ void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
     }else{
       aRLow = 0;
     }
+    aRUsed = aRLow;
     aRHigh = INFTY;
     aEffect = multiplicity;
   }
@@ -267,6 +289,7 @@ void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
     }else{
       aRLow = multiplicity;
     }
+    aRUsed = 0;
     aRHigh = INFTY;
     aEffect = 0;
   }
@@ -276,6 +299,7 @@ void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
     }else{
       aRHigh = multiplicity - 1;
     }
+    aRUsed = 0;
     aRLow = 0;
     aEffect = 0;
   }
@@ -287,29 +311,28 @@ void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
       aRLow = multiplicity;
       aRHigh = multiplicity;
     }
+    aRUsed = 0;
     aEffect = 0;
   }
   if (E == EDGE_RESET){
-    if (multiplicity < 0){
-      aRLow = -multiplicity;
-    }else{
-      aRLow = 0;
-    }
+    aRLow = 0;
+    aRUsed = 0;
     aRHigh = INFTY;
-    aEffect = NEGTY;
-    fprintf(stderr, "Warning: Reset edge detected! Net will not function as intended!\n");
+    aEffect = 0;
+    aEffectSetter = true;
   }
 
   if (arcs.count(transition) && arcs[transition].count(place)){
     #if DEBUG >= 9
     fprintf(stderr, "Combining arc between transition %s and place %s:\n", transitions[transition].c_str(), places[place].c_str());
     #endif
-    arcs[transition][place].combine(PetriArc(aRLow, aRHigh, aEffect));
+    arcs[transition][place].combine(PetriArc(aRUsed, aRLow, aRHigh, aEffect, aEffectSetter));
   }else{
+    arcs[transition][place] = PetriArc(aRUsed, aRLow, aRHigh, aEffect, aEffectSetter);
     #if DEBUG >= 10
-    fprintf(stderr, "Added arc between transition %s and place %s: ((%llu, %llu), %lli)\n", transitions[transition].c_str(), places[place].c_str(), aRLow, aRHigh, aEffect);
+    PetriArc & A = arcs[transition][place];
+    fprintf(stderr, "Arc between transition %s and place %s is now: ((%llu, %llu, %llu), %s%lli)\n", transitions[transition].c_str(), places[place].c_str(), A.rangeUsed, A.rangeLow, A.rangeHigh, A.effectSetter ? "S" : "", A.effect);
     #endif
-    arcs[transition][place] = PetriArc(aRLow, aRHigh, aEffect);
   }
 }
 
