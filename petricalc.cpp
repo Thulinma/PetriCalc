@@ -6,7 +6,9 @@
 
 #include "petricalc.h"
 #include <deque>
+#include <sstream>
 #include <algorithm>
+#include <iostream>
 
 /// \brief Base constructor will create a No-Operation arc ((0, 0, inf), 0).
 PetriArc::PetriArc(){
@@ -32,8 +34,8 @@ PetriArc::PetriArc(unsigned long long rUsed, unsigned long long rLow, unsigned l
 /// When called, true or false is returned to indicate if this arc can enable connected transitions (true) or not (false).
 bool PetriArc::rangeFunction(unsigned long long m){
   // From definition 8: fr ((l, h), m) = true if l ≤ m ≤ h and u ≤ v, false otherwise
-#if DEBUG >= 10
-  fprintf(stderr, "Range function: %llu <= %llu <= %llu && %llu <= %llu = %s", rangeLow, m, rangeHigh, rangeUsed, m, (rangeLow <= m && m <= rangeHigh && m <= rangeUsed)?"true":"false");
+#if DEBUG >= 8
+  std::cerr << "Arc " << label() << " is " << ((rangeLow <= m && m <= rangeHigh && rangeUsed <= m)?"enabled":"disabled") << " with " << m << " tokens" << std::endl;
 #endif
   return (rangeLow <= m && m <= rangeHigh && rangeUsed <= m);
 }
@@ -50,13 +52,27 @@ void PetriArc::effectFunction(unsigned long long & m){
   }
 }
 
+/// \brief Return a human-readable printed arc label.
+std::string PetriArc::label(){
+  std::stringstream out;
+  out << "((" << rangeUsed << ", " << rangeLow << ", ";
+  if (rangeHigh == INFTY){
+    out << "Infty";
+  }else{
+    out << rangeHigh;
+  }
+  out << "), (" << (effectSetter?"S":"") << effect << ", +" << effectAdded << "))";
+  return out.str();
+}
+
+
 /// \brief The combination operator from definition 8.
 /// 
 /// When called, this PetriArc and given PetriArc are combined into this PetriArc (irreversibly).
 void PetriArc::combine(PetriArc param){
   // From definition 8: ⊗(((u1, l1 , h1 ), e1 ), ((u2, l2 , h2 ), e2 )) = (u1 + u2, max(l1, l2), min(h1 , h2)), e1 + e2 )
   #if DEBUG >= 9
-  fprintf(stderr, "Combining: ((%llu, %llu, %llu), %s%lld) COMB ((%llu, %llu, %llu), %s%lld) = ", rangeUsed, rangeLow, rangeHigh, effectSetter?"S":"", effect, param.rangeUsed, param.rangeLow, param.rangeHigh, param.effectSetter?"S":"", param.effect);
+  std::cerr << " (" << label() << " COMB " << param.label() << ") = ";
   #endif 
   //Set u to the sum of u1 and u2
   rangeUsed += param.rangeUsed;
@@ -73,7 +89,7 @@ void PetriArc::combine(PetriArc param){
     effect = effectAdded;
   }
   #if DEBUG >= 9
-  fprintf(stderr, "((%llu, %llu, %llu), %s%lld)\n", rangeUsed, rangeLow, rangeHigh, effectSetter?"S":"", effect);
+  std::cerr << label() << std::endl;
   #endif 
 }
 
@@ -155,7 +171,7 @@ void PetriNet::addPlace(TiXmlNode * N){
     }
   }
   #if DEBUG >= 10
-  fprintf(stderr, "Added place %s ID %llu, %llu initial tokens\n", places[ID].c_str(), ID, marking[ID]);
+  std::cerr << "Added place " << places[ID] << " with " << marking[ID] << " tokens" << std::endl;
   #endif
 }
 
@@ -185,7 +201,7 @@ void PetriNet::addTransition(TiXmlNode * N){
     }
   }
   #if DEBUG >= 10
-  fprintf(stderr, "Added transition %s ID %llu\n", transitions[ID].c_str(), ID);
+  std::cerr << "Added transition " << transitions[ID] << std::endl;
   #endif
 }
 
@@ -324,14 +340,13 @@ void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
 
   if (arcs.count(transition) && arcs[transition].count(place)){
     #if DEBUG >= 9
-    fprintf(stderr, "Combining arc between transition %s and place %s:\n", transitions[transition].c_str(), places[place].c_str());
+    std::cerr << "Combining arc " << transitions[transition] << "<->" << places[place] << ": ";
     #endif
     arcs[transition][place].combine(PetriArc(aRUsed, aRLow, aRHigh, aEffect, aEffectSetter));
   }else{
     arcs[transition][place] = PetriArc(aRUsed, aRLow, aRHigh, aEffect, aEffectSetter);
     #if DEBUG >= 10
-    PetriArc & A = arcs[transition][place];
-    fprintf(stderr, "Arc between transition %s and place %s is now: ((%llu, %llu, %llu), %s%lli)\n", transitions[transition].c_str(), places[place].c_str(), A.rangeUsed, A.rangeLow, A.rangeHigh, A.effectSetter ? "S" : "", A.effect);
+    std::cerr << "Inserting arc " << transitions[transition] << "<->" << places[place] << ": " << arcs[transition][place].label() << std::endl;
     #endif
   }
 }
@@ -339,7 +354,7 @@ void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
 /// \brief Does a single calculation step, following the method given in definition 8.
 /// 
 /// Returns true if a step was completed, false if no more transitions are enabled.
-bool PetriNet::calculateStep(){
+bool PetriNet::calculateStep(int stepMode){
   // Definition 8: To calculate a single transition step for a given marked Petri net N = ((P, T, A), (D, fr , fe, L, ⊗, I), M ), do the following:
   // - Create a list E of all enabled transitions, using the method described in Definition 5 to determine enabledness for all t ∈ T .
   // - Pick any one transition t ∈ E and fire it using the method described in Definition 6.

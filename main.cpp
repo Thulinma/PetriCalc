@@ -4,14 +4,11 @@
 /// \date 2012-2016
 /// \copyright This code is public domain - do with it what you want. A mention of the original author would be appreciated though.
 
-//main PetriNet library
-#include "petricalc.h"
-//for std::cerr
-#include <iostream>
-//for time()
-#include <time.h>
-//for getpid()
-#include <sys/types.h>
+#include "petricalc.h" //main PetriNet library
+#include <iostream> //for std::cerr
+#include <string> //for std::string
+#include <time.h> //for time()
+#include <sys/types.h> //for getpid()
 #include <unistd.h>
 
 /// \brief Loads a Snoopy XML file and attempts to run a simulation on it.
@@ -26,16 +23,42 @@ int main(int argc, char ** argv){
 
   //Parse the command line - whine if it's obviously invalid
   int printcount = 1;
+  int stepmode = SINGLE_STEP;
   time_t lastSteps = 0, nextTime = time(0) + 1;
   std::map<std::string, unsigned int> cellnames;
   if (argc < 2){
-    std::cerr << "Usage: " << argv[0] << " snoopy_petrinet_filename [print_every_this_many_steps, default 1] [space-separated list of places to output, by default all places]" << std::endl;
+    std::cerr << "Usage: " << argv[0] << " snoopy_petrinet_filename [[[steptype=single [print_interval=1] space_separated_list_of_places_to_output=all ...]" << std::endl;
     return 1;
   }
+  
   if (argc > 2){
-    printcount = atoi(argv[2]);
+    stepmode = 0;
+    std::string newMode = argv[2];
+    if (newMode == "single"){stepmode = SINGLE_STEP;}
+    if (newMode == "concurrent"){stepmode = CONCUR_STEP;}
+    if (newMode == "autoconcurrent"){stepmode = AUTOCON_STEP;}
+    if (newMode == "maxconcurrent"){stepmode = MAX_CONCUR_STEP;}
+    if (newMode == "maxautoconcurrent"){stepmode = MAX_AUTOCON_STEP;}
+    if (!stepmode){
+      std::cerr << "steptype must be one of: single, concurrent, autoconcurrent, maxconcurrent, maxautoconcurrent. Aborting." << std::endl;
+      return 1;
+    }
+  }
+
+  std::cerr << "Step mode: ";
+  switch (stepmode){
+    case SINGLE_STEP: std::cerr << "single stepping"; break;
+    case CONCUR_STEP: std::cerr << "concurrent stepping"; break;
+    case AUTOCON_STEP: std::cerr << "auto-concurrent stepping"; break;
+    case MAX_CONCUR_STEP: std::cerr << "maximally concurrent stepping"; break;
+    case MAX_AUTOCON_STEP: std::cerr << "maximally auto-concurrent stepping"; break;
+  }
+  std::cerr << std::endl;
+  
+  if (argc > 3){
+    printcount = atoi(argv[3]);
     if (printcount < 1){
-      std::cerr << "print_ever_this_many_steps must be >= 1. Aborting run." << std::endl;
+      std::cerr << "print_interval must be >= 1. Aborting." << std::endl;
       return 1;
     }
   }
@@ -44,9 +67,9 @@ int main(int argc, char ** argv){
   std::cerr << "Loading " << argv[1] << "..." << std::endl;
   PetriNet Net(argv[1]);
 
-  //Parse more command line if argument count > 3 (= the places we want to print)
-  if (argc > 3){
-    for (int i = 3; i < argc; ++i){
+  //Parse more command line if argument count > 4 (= the places we want to print)
+  if (argc > 4){
+    for (int i = 4; i < argc; ++i){
       std::string tmp = argv[i];
       cellnames.insert(std::pair<std::string, unsigned int>(tmp, Net.findPlace(tmp)));
     }
@@ -57,7 +80,7 @@ int main(int argc, char ** argv){
   Net.printStateHeader(cellnames);
   Net.printState(cellnames);
   //While we can complete steps...
-  while (Net.calculateStep()){
+  while (Net.calculateStep(stepmode)){
     //Increase the step counter, print state if wanted
     steps++;
     if (steps % printcount == 0){

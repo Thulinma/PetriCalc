@@ -14,14 +14,19 @@
 //DEBUG levels:
 // 10 = All load stages at full verbosity
 //  9 = Arc combining
+//  8 = Range function evaluations
 //  5 = Enabled transition counts during stepping
 //  4 = Chosen transition during stepping
+
+#define SINGLE_STEP 1 ///< Single step mode
+#define CONCUR_STEP 2 ///< Concurrent step mode
+#define AUTOCON_STEP 3 ///< Auto-concurrent step mode
+#define MAX_CONCUR_STEP 4 ///< Maximally concurrent step mode
+#define MAX_AUTOCON_STEP 5 ///< Maximally auto-concurrent step mode
 
 
 /// Since infinity is not representable as a number, the constant 0xFFFFFFFFFFFFFFFFull is used to represent infinity.
 #define INFTY 0xFFFFFFFFFFFFFFFFull
-/// Since negative infinity is not representable as a number, the constant -0xFFFFFFFFFFFFFFll is used to represent negative infinity.
-#define NEGTY -0xFFFFFFFFFFFFFFll
 
 /// \brief A PetriNet arc - contains the arc label for a PetriNet arc.
 /// The range function, effect function and combine function are direct conversions from the range function, effect function and combination operator from Definition 11.
@@ -38,13 +43,14 @@ class PetriArc{
     bool rangeFunction(unsigned long long);
     void effectFunction(unsigned long long &);
     void combine(PetriArc param);
+    std::string label();
 };
 
 /// \brief A PetriNet calculator.
 class PetriNet{
   public:
     PetriNet(std::string XML);
-    bool calculateStep();
+    bool calculateStep(int stepMode);
     void printStateHeader(std::map<std::string, unsigned int> & cellnames);
     void printState(std::map<std::string, unsigned int> & cellnames);
     bool isEnabled(unsigned int T);
