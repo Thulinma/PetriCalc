@@ -46,6 +46,14 @@ class PetriArc{
     std::string label();
 };
 
+class PetriSuperTrans{
+  public:
+    bool isEnabled(std::map<unsigned long long, unsigned long long> & marking);
+    void combine(std::map<unsigned long long, PetriArc> & addArcs);
+    bool isCombinedEnabled(std::map<unsigned long long, PetriArc> & addArcs, std::map<unsigned long long, unsigned long long> & marking);
+    std::map<unsigned long long, PetriArc> myArcs;
+};
+
 /// \brief A PetriNet calculator.
 class PetriNet{
   public:

@@ -93,6 +93,63 @@ void PetriArc::combine(PetriArc param){
   #endif 
 }
 
+/// \brief Checks if this PetriSuperTrans is enabled in the given marking
+bool PetriSuperTrans::isEnabled(std::map<unsigned long long, unsigned long long> & marking){
+  // Definition 5: In a marked Petri net N = ((P, T, A), (D, fr , fe , L, ⊗, I), M ) a transition t ∈ T is enabled when for all p ∈ P such that p‡t, fR(aR , M (p)) = true, where a is the pt-combined arc label.
+
+  //We consider transitions without arcs to not be enabled, since that is the only thing that makes sense.
+  if (!myArcs.size()){
+    return false;
+  }
+
+  // Loop over all p ∈ P such that p‡t
+  std::map<unsigned long long, PetriArc>::iterator A;
+  for (A = myArcs.begin(); A != myArcs.end(); A++){
+    //Check fR(aR , M (p)), if false, return false
+    //We do not calculate the pt-combined arc label here, since it's been pre-calculated during net load already for each transition
+    if (!A->second.rangeFunction(marking[A->first])){return false;}
+  }
+
+  //only if all fR(aR , M (p)) are true, return true
+  return true;
+}
+
+/// \brief Combines the given arcs with existing arcs to the same places, adding new arcs to places that do not already have an arc.
+void PetriSuperTrans::combine(std::map<unsigned long long, PetriArc> & addArcs){
+  std::map<unsigned long long, PetriArc>::iterator A;
+  for (A = addArcs.begin(); A != addArcs.end(); ++A){
+    if (myArcs.count(A->first)){
+      myArcs[A->first].combine(A->second);
+    }else{
+      myArcs[A->first] = A->second;
+    }
+  }
+}
+
+/// \brief Checks if this PetriSuperTrans would still be enabled if combined with the given arcs under the given marking.
+///
+/// This function assumes the PetriSuperTrans is already enabled before combining.
+bool PetriSuperTrans::isCombinedEnabled(std::map<unsigned long long, PetriArc> & addArcs, std::map<unsigned long long, unsigned long long> & marking){
+  //If we're not adding anything, by definition we are enabled after adding.
+  //This is true because we assume the PetriSuperTrans is already enabled.
+  if (!addArcs.size()){return true;}
+  std::map<unsigned long long, PetriArc>::iterator A;
+  for (A = addArcs.begin(); A != addArcs.end(); ++A){
+    if (myArcs.count(A->first)){
+      //If an arc already exists, check if the combined arc is enabled.
+      //Not enabled? Return false and cancel.
+      PetriArc tempArc = myArcs[A->first];
+      tempArc.combine(A->second);
+      if (!tempArc.rangeFunction(marking[A->first])){return false;}
+    }else{
+      //No arc exists - we simply check the new arc directly, same method.
+      if (!(A->second).rangeFunction(marking[A->first])){return false;}
+    }
+  }
+  //No false responses to the range function - we are enabled.
+  return true;
+}
+
 /// \brief Constructor that parses a std::string containing Snoopy XML into a PetriNet.
 /// 
 /// It does this by checking if nodeclasses and edgeclasses entries are present, and if so, feeds those to parseNodes respectively parseEdges.
@@ -355,47 +412,100 @@ void PetriNet::addEdge(TiXmlNode * N, unsigned int E){
 /// 
 /// Returns true if a step was completed, false if no more transitions are enabled.
 bool PetriNet::calculateStep(int stepMode){
-  // Definition 8: To calculate a single transition step for a given marked Petri net N = ((P, T, A), (D, fr , fe, L, ⊗, I), M ), do the following:
-  // - Create a list E of all enabled transitions, using the method described in Definition 5 to determine enabledness for all t ∈ T .
-  // - Pick any one transition t ∈ E and fire it using the method described in Definition 6.
 
   std::map<unsigned long long, std::map<unsigned long long, PetriArc> >::iterator T;
   std::map<unsigned long long, PetriArc>::iterator A;
   std::set<unsigned long long> enabled; //Enabled transitions
   std::set<unsigned long long>::iterator selector;
-  
-  //Every transition is checked for enabledness, and made part of a subset consisting of only enabled transitions.
-  for (T = arcs.begin(); T != arcs.end(); T++){
-    if (isEnabled(T->first)){enabled.insert(T->first);}
-  }
-  #if DEBUG >= 5
-  fprintf(stderr, "Stepping: %u transitions enabled\n", (unsigned int)enabled.size());
-  #endif
-  //Nothing enabled? We're done. Cancel running net.
-  if (enabled.size() == 0){return false;}
-
-  selector = enabled.begin();
-  std::advance(selector, rand() % enabled.size());
 
 
-  #if DEBUG >= 4
-  fprintf(stderr, "Stepping: picked transition %s\n", transitions[*selector].c_str());
-  #endif
+  if (stepMode == SINGLE_STEP){
+    //Every transition is checked for enabledness, and made part of a subset consisting of only enabled transitions.
+    for (T = arcs.begin(); T != arcs.end(); T++){
+      if (isEnabled(T->first)){enabled.insert(T->first);}
+    }
 
-  // Definition 6 In a marked Petri net N = ((P, T, A), (D, fr , fe , L, ⊗, I), M ) the firing of a transition t ∈ T is changing M into M 0 so that:
-  // - ∀p ∈ P such that p ‡ t, M 0(p) = fE (aE , M (p))
-  // - ∀p ∈ P such that p † t, M 0(p) = M (p)
-  // Where a is the pt-combined arc label.
-
-  //Run the effect function on each arc of the chosen transition.
-  //We do not calculate the pt-combined arc label here, since it's been pre-calculated during net load already for each transition
-  std::map<unsigned long long, PetriArc> & selected = arcs[*selector];
-  for (A = selected.begin(); A != selected.end(); A++){
-    A->second.effectFunction(marking[A->first]);
+    #if DEBUG >= 5
+    fprintf(stderr, "Single-stepping: %u transitions enabled\n", (unsigned int)enabled.size());
+    #endif
+    //Nothing enabled? We're done. Cancel running net.
+    if (enabled.size() == 0){return false;}
+    //pick a random enabled transition
+    selector = enabled.begin();
+    std::advance(selector, rand() % enabled.size());
+    #if DEBUG >= 4
+    fprintf(stderr, "Single-stepping: picked transition %s\n", transitions[*selector].c_str());
+    #endif
+    //Run the effect function on each arc of the chosen transition.
+    //We do not calculate the pt-combined arc label here, since it's been pre-calculated during net load already for each transition
+    std::map<unsigned long long, PetriArc> & selected = arcs[*selector];
+    for (A = selected.begin(); A != selected.end(); A++){
+      A->second.effectFunction(marking[A->first]);
+    }
+    //Step completed.
+    return true;
   }
   
-  //Step completed.
-  return true;
+  if (stepMode == MAX_AUTOCON_STEP){
+    //Every transition is checked for enabledness, and made part of a subset consisting of only enabled transitions.
+    for (T = arcs.begin(); T != arcs.end(); T++){
+      if (isEnabled(T->first)){enabled.insert(T->first);}
+    }
+
+    #if DEBUG >= 5
+    fprintf(stderr, "Maximal auto-concurrent stepping: %u transitions enabled\n", (unsigned int)enabled.size());
+    #endif
+    //Nothing enabled? We're done. Cancel running net.
+    if (enabled.size() == 0){return false;}
+    //prepare empty list of chosen transitions and empty PetriSuperTrans
+    std::map<unsigned long long, unsigned long long> chosenTrans;
+    PetriSuperTrans super;
+
+    //pick a random enabled transition
+    selector = enabled.begin();
+    std::advance(selector, rand() % enabled.size());
+    chosenTrans[*selector]++;//increment chosen transition counter
+    super.combine(arcs[*selector]);//combine the chosen transition into the PetriSuperTrans
+    
+    //keep going until no enabled transitions are left to add
+    while (enabled.size()){
+      //pick a random enabled transition
+      selector = enabled.begin();
+      std::advance(selector, rand() % enabled.size());
+      //would super still be enabled if this transition was added?
+      if (super.isCombinedEnabled(arcs[*selector], marking)){
+        //if so, add it
+        chosenTrans[*selector]++;//increment chosen transition counter
+        super.combine(arcs[*selector]);//combine the chosen transition into the PetriSuperTrans
+      }else{
+        //if not, remove it from the list of enabled transitions
+        enabled.erase(selector);
+      }
+    }
+
+
+    #if DEBUG >= 4
+    std::cerr << "Maximal auto-concurrent stepping: picked transitions:";
+    std::map<unsigned long long, unsigned long long>::iterator pckd;
+    for (pckd = chosenTrans.begin(); pckd != chosenTrans.end(); pckd++){
+      std::cerr << " " << transitions[pckd->first];
+      if (pckd->second > 1){
+        std::cerr << " (X" << pckd->second << ")";
+      }
+    }
+    std::cerr << std::endl;
+    #endif
+    //Run the effect function on each arc of super.
+    std::map<unsigned long long, PetriArc> & selected = super.myArcs;
+    for (A = selected.begin(); A != selected.end(); A++){
+      A->second.effectFunction(marking[A->first]);
+    }
+    //Step completed.
+    return true;
+  }
+
+  std::cerr << "Step type not implemented. Cancelling run." << std::endl;
+  return false;
 }
 
 /// \brief Returns true if the given transition ID is enabled, false otherwise.
