@@ -24,7 +24,7 @@ int main(int argc, char ** argv){
   //Parse the command line - whine if it's obviously invalid
   int printcount = 1;
   int stepmode = SINGLE_STEP;
-  time_t lastSteps = 0, nextTime = time(0) + 1;
+  time_t lastSteps = 0, startTime = time(0), lastTime = time(0);
   std::map<std::string, unsigned int> cellnames;
   if (argc < 2){
     std::cerr << "Usage: " << argv[0] << " snoopy_petrinet_filename [[[steptype=single [print_interval=1] space_separated_list_of_places_to_output=all ...]" << std::endl;
@@ -87,9 +87,10 @@ int main(int argc, char ** argv){
       Net.printState(cellnames);
     }
     //Print rough calculation speed approximately once per second
-    if (time(0) >= nextTime){
-      nextTime = time(0)+1;
-      std::cerr << "Calculated " << steps << " steps, " << (steps-lastSteps) << " steps/s..." << std::endl;
+    time_t now = time(0);
+    if (now > lastTime){
+      std::cerr << "Calculated " << steps << " steps, avg: " << (steps/(double)(now-startTime)) << "s/s, cur:" << (steps-lastSteps)/(double)(now-lastTime) << " s/s..." << std::endl;
+      lastTime = now;
       lastSteps = steps;
     }
   }
