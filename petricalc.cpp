@@ -66,11 +66,10 @@ std::string PetriArc::label(){
 }
 
 
-/// \brief The combination operator from definition 8.
+/// \brief The combination operator.
 /// 
 /// When called, this PetriArc and given PetriArc are combined into this PetriArc (irreversibly).
 void PetriArc::combine(PetriArc param){
-  // From definition 8: ⊗(((u1, l1 , h1 ), e1 ), ((u2, l2 , h2 ), e2 )) = (u1 + u2, max(l1, l2), min(h1 , h2)), e1 + e2 )
   #if DEBUG >= 9
   std::cerr << " (" << label() << " COMB " << param.label() << ") = ";
   #endif 
@@ -80,8 +79,9 @@ void PetriArc::combine(PetriArc param){
   if (param.rangeLow > rangeLow){rangeLow = param.rangeLow;}
   //Set h to the minimum of h1 and h2
   if (param.rangeHigh < rangeHigh){rangeHigh = param.rangeHigh;}
-  //Set e to the sum of e1 and e2
+  //Set a to the sum of a1 and a2
   effectAdded += param.effectAdded;
+  //If either is a setter-arc, e is the new a. Otherwise, it is e1+e2.
   if (!effectSetter && !param.effectSetter){
     effect += param.effect;
   }else{
